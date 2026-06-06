@@ -90,7 +90,6 @@ def draw(initial_weeks=DEFAULT_WEEKS,
         print(f"Price dipped below SMA? → {'YES' if sma_at_min is not None and min_price < sma_at_min else 'NO (very close)'}")
 
     print(f'\nDrawing interactive Weekly Moving Average (range: {min_weeks}-{max_weeks} weeks)')
-    print('   → Default 200 weeks = famous "Bitcoin floor" SMA')
     print('   → Sunday weekly closes used for maximum accuracy')
 
     plt.show(block=block_window)
