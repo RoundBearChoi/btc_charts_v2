@@ -102,7 +102,7 @@ def _download_historic_daily(
 
     data = []
     days_per_chunk = 2000
-    current_end_ts = int(end_date.timestamp())
+    current_end_ts = int(dt.datetime.combine(end_date, dt.datetime.min.time()).timestamp())
 
     while total_days > 0:
         limit = min(days_per_chunk, total_days)
