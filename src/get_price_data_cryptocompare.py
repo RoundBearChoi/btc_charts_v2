@@ -1,16 +1,22 @@
 import pandas as pd
 import os
-import cryptocompare
+import requests
 import math
 import datetime as dt
 import time
 import logging
+from typing import Optional, Dict, Any
 
 # ==================== CONFIGURATION ====================
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "cryptocompare_data")
 
 logger = logging.getLogger(__name__)
+
+# Optional API key for higher limits (get free at https://min-api.cryptocompare.com/)
+API_KEY = os.getenv("CRYPTOCOMPARE_API_KEY")
+
+BASE_URL = "https://min-api.cryptocompare.com/data/v2/histoday"
 
 
 def _get_cache_file_path(coin: str) -> str:
@@ -51,10 +57,42 @@ def _clean_price_dataframe(df: pd.DataFrame, coin: str = "BTC") -> pd.DataFrame:
     return df
 
 
+def _make_api_request(params: Dict[str, Any], retries: int = 3) -> Dict:
+    """Robust API request with error handling and rate limiting."""
+    headers = {}
+    if API_KEY:
+        headers["authorization"] = f"Apikey {API_KEY}"
+
+    for attempt in range(retries):
+        try:
+            response = requests.get(BASE_URL, params=params, headers=headers, timeout=15)
+            response.raise_for_status()
+            data = response.json()
+
+            if data.get("Response") == "Error":
+                error_msg = data.get("Message", "Unknown error")
+                raise ValueError(f"CryptoCompare API Error: {error_msg}")
+
+            if "Data" not in data or "Data" not in data.get("Data", {}):
+                raise ValueError(f"Unexpected API response structure: {list(data.keys())}")
+
+            return data
+
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"Request failed (attempt {attempt+1}/{retries}): {e}")
+            if attempt < retries - 1:
+                time.sleep(2 ** attempt)  # exponential backoff
+            else:
+                raise
+        except Exception as e:
+            logger.error(f"API error: {e}")
+            raise
+
+
 def _download_historic_daily(
-    coin: str, currency: str, years: float, end_date: dt.date = None
+    coin: str, currency: str, years: float, end_date: Optional[dt.date] = None
 ) -> pd.DataFrame:
-    """Core download function (chunked to respect CryptoCompare 2000-day limit)."""
+    """Core download function using direct v2 API (more reliable)."""
     if end_date is None:
         end_date = dt.date.today()
 
@@ -64,24 +102,35 @@ def _download_historic_daily(
 
     data = []
     days_per_chunk = 2000
-    num_full_chunks = total_days // days_per_chunk
-    remaining_days = total_days % days_per_chunk
+    current_end_ts = int(end_date.timestamp())
 
-    current_end = end_date
+    while total_days > 0:
+        limit = min(days_per_chunk, total_days)
 
-    for i in range(num_full_chunks):
-        chunk_data = cryptocompare.get_historical_price_day(
-            coin, currency=currency, limit=days_per_chunk, toTs=current_end
-        )
-        data.extend(chunk_data)
-        current_end = current_end - dt.timedelta(days=days_per_chunk)
-        time.sleep(0.5)
+        params = {
+            "fsym": coin,
+            "tsym": currency,
+            "limit": limit,
+            "toTs": current_end_ts
+        }
 
-    if remaining_days > 0:
-        chunk_data = cryptocompare.get_historical_price_day(
-            coin, currency=currency, limit=remaining_days, toTs=current_end
-        )
-        data.extend(chunk_data)
+        api_response = _make_api_request(params)
+        chunk = api_response["Data"]["Data"]
+
+        if not chunk:
+            logger.warning("Empty chunk received for %s.", coin)
+            break
+
+        data.extend(chunk)
+
+        # Move to previous period
+        if chunk:
+            current_end_ts = chunk[0]["time"] - 1
+        else:
+            current_end_ts -= (limit * 86400)
+        total_days -= limit
+
+        time.sleep(1.2)  # Respect rate limits
 
     if not data:
         logger.warning("No data returned for %s.", coin)
@@ -104,7 +153,7 @@ def _download_full_historic_df(
 
     df_recent = _download_historic_daily(coin, currency, years_per_batch)
 
-    time.sleep(1)
+    time.sleep(1.5)
 
     if not df_recent.empty:
         older_end_date = df_recent.index.min().date() - dt.timedelta(days=1)
@@ -122,10 +171,9 @@ def _download_full_historic_df(
 
     full_df = full_df.sort_index()
 
-    # Final cleaning (once)
+    # Final cleaning
     full_df = _clean_price_dataframe(full_df, coin=coin)
 
-    # Deduplicate any accidental overlap
     if not full_df.empty:
         full_df = full_df[~full_df.index.duplicated(keep="first")]
 
@@ -155,10 +203,7 @@ def _load_price_data(coin: str) -> pd.DataFrame:
 # ==================== PUBLIC API ====================
 
 def get_price_data(coin: str = "BTC", force_download: bool = False) -> pd.DataFrame:
-    """Get price data for ANY coin (BTC, FARTCOIN, TROLL, PEPE...).
-
-    Uses intelligent caching + chunked downloads to respect API limits.
-    """
+    """Get price data for ANY coin with robust direct API calls."""
     coin = coin.upper()
     CSV_FILE = _get_cache_file_path(coin)
 
@@ -190,7 +235,7 @@ def get_btc_price_data(force_download: bool = False) -> pd.DataFrame:
 # ==================== DEMO / CLI ====================
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    print("=== Crypto Price Data Fetcher (CryptoCompare) ===")
+    print("=== Crypto Price Data Fetcher (Reliable v2) ===")
     df_btc = get_btc_price_data()
     print(f"BTC ready: {len(df_btc):,} rows")
     print("Ready for FARTCOIN, TROLL, or any ticker!")
