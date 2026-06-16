@@ -239,3 +239,5 @@ if __name__ == "__main__":
     df_btc = get_btc_price_data()
     print(f"BTC ready: {len(df_btc):,} rows")
     print("Ready for FARTCOIN, TROLL, or any ticker!")
+
+# test
