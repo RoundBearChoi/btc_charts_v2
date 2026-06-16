@@ -203,29 +203,75 @@ def _load_price_data(coin: str) -> pd.DataFrame:
 # ==================== PUBLIC API ====================
 
 def get_price_data(coin: str = "BTC", force_download: bool = False) -> pd.DataFrame:
-    """Get price data for ANY coin with robust direct API calls."""
+    """Get price data for ANY coin with robust direct API calls.
+    
+    Behavior (no interactive prompt):
+    - If no cache exists or force_download=True → full historical download.
+    - If cache exists:
+        - If already up to date (latest close is yesterday or newer) → return cache immediately (no API call).
+        - Otherwise → incrementally download only recent missing days (~last 120 days) and merge.
+    """
     coin = coin.upper()
     CSV_FILE = _get_cache_file_path(coin)
 
-    if not force_download and os.path.exists(CSV_FILE):
-        try:
-            logger.info("Existing cached %s data detected.", coin)
-            df_cached = _load_price_data(coin)
-            logger.info("Current cache: %s → %s", df_cached.index.min().date(), df_cached.index.max().date())
-            response = input(f"\nDownload fresh full history for {coin}? (y/n): ").strip().lower()
-            if response not in ["y", "yes"]:
-                logger.info("Using cached %s data.", coin)
-                return df_cached
-        except Exception as e:
-            logger.warning("%s — downloading fresh...", e)
+    if force_download or not os.path.exists(CSV_FILE):
+        if force_download:
+            logger.info("force_download=True → performing full historical download for %s", coin)
+        else:
+            logger.info("No cached data found for %s → performing initial full download", coin)
+        
+        daily = _download_full_historic_df(coin)
+        os.makedirs(DATA_DIR, exist_ok=True)
+        daily.to_csv(CSV_FILE)
+        logger.info("%s data saved → %s", coin, os.path.abspath(CSV_FILE))
+        return daily
 
-    logger.info("Starting fresh %s download from CryptoCompare...", coin)
-    daily = _download_full_historic_df(coin, years_per_batch=8.0)
+    # === Smart incremental path (no prompt) ===
+    try:
+        df_cached = _load_price_data(coin)
+    except Exception as e:
+        logger.warning("Failed to load cache (%s). Falling back to full download.", e)
+        daily = _download_full_historic_df(coin)
+        daily.to_csv(CSV_FILE)
+        return daily
 
-    os.makedirs(DATA_DIR, exist_ok=True)
-    daily.to_csv(CSV_FILE)
-    logger.info("%s data saved → %s", coin, os.path.abspath(CSV_FILE))
-    return daily
+    latest_cached_date = df_cached.index.max().date()
+    today = dt.date.today()
+    # Latest possible completed daily close is yesterday (UTC)
+    expected_latest = today - dt.timedelta(days=1)
+
+    days_behind = (expected_latest - latest_cached_date).days
+
+    if days_behind <= 0:
+        logger.info("Cache is up to date (latest: %s). No download needed.", latest_cached_date)
+        return df_cached
+
+    # Need to fetch recent data
+    logger.info("Cache is %s day(s) behind (latest cached: %s). Fetching recent updates...",
+                days_behind, latest_cached_date)
+
+    # Download last ~120 days (very fast, 1 API call). This safely covers any gap + some buffer.
+    recent_years = 120 / 365.25
+    recent_df = _download_historic_daily(coin, "USD", years=recent_years, end_date=today)
+
+    if recent_df.empty:
+        logger.warning("No recent data returned from API. Using existing cache.")
+        return df_cached
+
+    # Merge: keep all old data + new data, prefer newer on duplicate dates
+    combined = pd.concat([df_cached, recent_df])
+    combined = combined[~combined.index.duplicated(keep="last")]
+    combined = combined.sort_index()
+
+    # Clean again (in case new data had zeros etc.)
+    combined = _clean_price_dataframe(combined, coin=coin)
+
+    # Save updated cache
+    combined.to_csv(CSV_FILE)
+    logger.info("Updated %s cache: now %s rows from %s to %s",
+                coin, len(combined), combined.index.min().date(), combined.index.max().date())
+
+    return combined
 
 
 def get_btc_price_data(force_download: bool = False) -> pd.DataFrame:
@@ -235,9 +281,7 @@ def get_btc_price_data(force_download: bool = False) -> pd.DataFrame:
 # ==================== DEMO / CLI ====================
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    print("=== Crypto Price Data Fetcher (Reliable v2) ===")
+    print("=== Crypto Price Data Fetcher (Smart Incremental v2) ===")
     df_btc = get_btc_price_data()
-    print(f"BTC ready: {len(df_btc):,} rows")
+    print(f"BTC ready: {len(df_btc):,} rows  |  Range: {df_btc.index.min().date()} → {df_btc.index.max().date()}")
     print("Ready for FARTCOIN, TROLL, or any ticker!")
-
-# test
