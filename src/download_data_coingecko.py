@@ -9,14 +9,12 @@ from typing import Optional, Dict, Any
 """
 download_data_coingecko.py
 
-Downloads recent BTC market data from CoinGecko and saves clean **daily** closes.
+Two main capabilities:
+1. download_btc_recent_market_data(days=30)   → Clean daily data for recent N days
+2. download_btc_full_daily_history()            → Full history back to ~2010 (chunked safely)
 
-Key improvements:
-- Always requests daily granularity (interval=daily) so you get exactly 1 row per day.
-- Deduplicates any duplicate dates (keeps the last value of the day).
-- Works correctly with both Demo and Pro API keys.
-
-Data is saved to: src/coingecko_data/coingecko_btc_recent_market_data.csv
+Both return a clean DataFrame with exactly one row per day (close + optional market_cap/volume).
+Data saved in src/coingecko_data/
 """
 
 # ==================== CONFIGURATION ====================
@@ -25,7 +23,7 @@ DATA_DIR = os.path.join(SCRIPT_DIR, "coingecko_data")
 
 logger = logging.getLogger(__name__)
 
-# ====================== KEY DETECTION (robust) ======================
+# Key detection
 DEMO_KEY_RAW = os.getenv("COINGECKO_DEMO_API_KEY")
 PRO_KEY_RAW  = os.getenv("COINGECKO_API_KEY") or os.getenv("COINGECKO_PRO_API_KEY")
 raw_key = DEMO_KEY_RAW or PRO_KEY_RAW
@@ -48,22 +46,20 @@ else:
     key_type = "none"
 
 
-def _get_cache_file_path() -> str:
+def _get_cache_file_path(filename: str) -> str:
     os.makedirs(DATA_DIR, exist_ok=True)
-    return os.path.join(DATA_DIR, "coingecko_btc_recent_market_data.csv")
+    return os.path.join(DATA_DIR, filename)
 
 
 def _make_api_request(endpoint: str, params: Dict[str, Any], retries: int = 3) -> Dict[str, Any]:
     headers: Dict[str, str] = {}
     if API_KEY and KEY_HEADER_NAME:
         headers[KEY_HEADER_NAME] = API_KEY
-
     url = f"{BASE_URL}{endpoint}"
     last_exception = None
-
     for attempt in range(retries):
         try:
-            response = requests.get(url, params=params, headers=headers, timeout=20)
+            response = requests.get(url, params=params, headers=headers, timeout=25)
             response.raise_for_status()
             data = response.json()
             if isinstance(data, dict) and data.get("error"):
@@ -74,7 +70,7 @@ def _make_api_request(endpoint: str, params: Dict[str, Any], retries: int = 3) -
             logger.warning("Request failed (attempt %s/%s): %s", attempt + 1, retries, e)
             if hasattr(e, 'response') and e.response is not None:
                 try:
-                    logger.warning("Server response: %s", e.response.text[:500])
+                    logger.warning("Server response: %s", e.response.text[:400])
                 except Exception:
                     pass
             if attempt < retries - 1:
@@ -87,60 +83,20 @@ def _make_api_request(endpoint: str, params: Dict[str, Any], retries: int = 3) -
     raise last_exception
 
 
-def download_btc_recent_market_data(
-    days: int = 30,
-    precision: Optional[int] = None,
-    force_download: bool = False
-) -> pd.DataFrame:
-    """
-    Download recent BTC data from CoinGecko with **clean daily closes**.
-
-    - Uses interval=daily so you get exactly one row per day.
-    - Deduplicates any duplicate dates (keeps the last value of each day).
-    - Columns: close, market_cap (optional), total_volume (optional)
-    """
-    CSV_FILE = _get_cache_file_path()
-
-    if not force_download and os.path.exists(CSV_FILE):
-        try:
-            df_cached = pd.read_csv(CSV_FILE, index_col=0, parse_dates=True)
-            if not df_cached.empty:
-                last_date = df_cached.index.max().date()
-                data_age = (dt.date.today() - last_date).days
-                if data_age <= 1 and len(df_cached) >= max(3, days - 2):
-                    logger.info("Using cached daily data (%s rows, last %s)", len(df_cached), last_date)
-                    return df_cached
-                logger.info("Cache stale or insufficient — refreshing...")
-        except Exception as e:
-            logger.warning("Cache issue (%s) — fresh download.", e)
-
-    logger.info("=== Downloading last %s days of BTC data (daily) from CoinGecko ===", days)
-
-    endpoint = "/coins/bitcoin/market_chart"
-    params: Dict[str, Any] = {
-        "vs_currency": "usd",
-        "days": str(days),
-        "interval": "daily",          # <--- KEY: forces one point per day
-    }
-    if precision is not None:
-        params["precision"] = str(precision)
-
-    raw = _make_api_request(endpoint, params)
-
+def _parse_market_chart(raw: dict) -> pd.DataFrame:
+    """Convert CoinGecko market_chart response into clean daily DataFrame."""
     prices = raw.get("prices", [])
     market_caps = raw.get("market_caps", [])
     total_volumes = raw.get("total_volumes", [])
 
     if not prices:
-        raise ValueError("No price data returned from CoinGecko.")
+        return pd.DataFrame()
 
-    # Build DataFrame
     df = pd.DataFrame(prices, columns=["timestamp_ms", "close"])
     df["date"] = pd.to_datetime(df["timestamp_ms"], unit="ms").dt.normalize()
     df = df.set_index("date").sort_index()
     df = df.drop(columns=["timestamp_ms"])
 
-    # Join optional fields
     if market_caps:
         df_mc = pd.DataFrame(market_caps, columns=["ts", "market_cap"])
         df_mc["date"] = pd.to_datetime(df_mc["ts"], unit="ms").dt.normalize()
@@ -151,51 +107,142 @@ def download_btc_recent_market_data(
         df_vol["date"] = pd.to_datetime(df_vol["ts"], unit="ms").dt.normalize()
         df = df.join(df_vol.set_index("date")[["total_volume"]], how="left")
 
-    # === CLEAN UP: Keep only one row per day (last value of the day) ===
-    before = len(df)
+    # Deduplicate (keep last value of each day)
     df = df[~df.index.duplicated(keep="last")]
-    after = len(df)
-    if before != after:
-        logger.info("Removed %s duplicate intraday rows → kept %s daily rows", before - after, after)
+    return df.dropna(how="all")
 
-    df = df.dropna(how="all")
-    if df.empty:
-        raise ValueError("Empty result after processing.")
 
-    logger.info("Final daily data: %s rows from %s to %s", len(df), df.index.min().date(), df.index.max().date())
+def download_btc_recent_market_data(
+    days: int = 30,
+    precision: Optional[int] = None,
+    force_download: bool = False
+) -> pd.DataFrame:
+    """Download clean daily data for the last N days."""
+    CSV_FILE = _get_cache_file_path("coingecko_btc_recent_market_data.csv")
+
+    if not force_download and os.path.exists(CSV_FILE):
+        try:
+            df = pd.read_csv(CSV_FILE, index_col=0, parse_dates=True)
+            if len(df) >= max(3, days - 2) and (dt.date.today() - df.index.max().date()).days <= 1:
+                logger.info("Using cached recent data (%s rows)", len(df))
+                return df
+        except Exception:
+            pass
+
+    logger.info("Downloading last %s days (daily) from CoinGecko...", days)
+    params = {
+        "vs_currency": "usd",
+        "days": str(days),
+        "interval": "daily",
+    }
+    if precision is not None:
+        params["precision"] = str(precision)
+
+    raw = _make_api_request("/coins/bitcoin/market_chart", params)
+    df = _parse_market_chart(raw)
 
     df.to_csv(CSV_FILE)
-    logger.info("Saved clean daily data → %s", os.path.abspath(CSV_FILE))
+    logger.info("Saved %s daily rows → %s", len(df), CSV_FILE)
     return df
 
 
-# Backwards-compatible aliases
-def download_btc_30d_market_data(force_download: bool = False) -> pd.DataFrame:
-    return download_btc_recent_market_data(days=30, force_download=force_download)
+def download_btc_full_daily_history(
+    start_year: int = 2010,
+    force_download: bool = False
+) -> pd.DataFrame:
+    """
+    Download **full daily BTC history** from CoinGecko back to ~2010.
 
-def get_btc_30d_closing_prices(force_download: bool = False) -> pd.DataFrame:
-    return download_btc_recent_market_data(days=30, force_download=force_download)
+    Uses chunked requests ( ~365 days per call ) + the range endpoint
+    to safely get 15+ years of clean daily closes.
 
-def get_btc_30d_market_data(force_download: bool = False) -> pd.DataFrame:
-    return download_btc_recent_market_data(days=30, force_download=force_download)
+    This is the function you want for "all the way back to 2010".
+    """
+    CSV_FILE = _get_cache_file_path("coingecko_btc_full_history_daily.csv")
+
+    if not force_download and os.path.exists(CSV_FILE):
+        try:
+            df = pd.read_csv(CSV_FILE, index_col=0, parse_dates=True)
+            if len(df) > 3000:  # roughly 8+ years
+                logger.info("Using cached full history (%s rows, %s → %s)",
+                            len(df), df.index.min().date(), df.index.max().date())
+                return df
+        except Exception:
+            pass
+
+    logger.info("=== Building full daily BTC history back to %s ===", start_year)
+
+    end_date = dt.date.today()
+    start_date = dt.date(start_year, 1, 1)
+
+    all_chunks = []
+    current_end = end_date
+
+    chunk_days = 365
+    request_count = 0
+
+    while current_end > start_date:
+        chunk_start = current_end - dt.timedelta(days=chunk_days)
+        if chunk_start < start_date:
+            chunk_start = start_date
+
+        from_ts = int(dt.datetime.combine(chunk_start, dt.time.min).timestamp())
+        to_ts   = int(dt.datetime.combine(current_end, dt.time.min).timestamp())
+
+        logger.info("Fetching chunk: %s → %s (%s days)", chunk_start, current_end, (current_end - chunk_start).days)
+
+        params = {
+            "vs_currency": "usd",
+            "from": from_ts,
+            "to": to_ts,
+            "interval": "daily",
+        }
+
+        try:
+            raw = _make_api_request("/coins/bitcoin/market_chart/range", params)
+            chunk_df = _parse_market_chart(raw)
+            if not chunk_df.empty:
+                all_chunks.append(chunk_df)
+        except Exception as e:
+            logger.warning("Chunk %s–%s failed: %s", chunk_start, current_end, e)
+
+        current_end = chunk_start - dt.timedelta(days=1)
+        request_count += 1
+
+        # Be nice to free/demo rate limits
+        time.sleep(1.2 if key_type == "demo" else 0.8)
+
+    if not all_chunks:
+        raise ValueError("No data retrieved for full history.")
+
+    full_df = pd.concat(all_chunks).sort_index()
+    full_df = full_df[~full_df.index.duplicated(keep="last")]
+
+    logger.info("Final full history: %s daily rows from %s to %s",
+                len(full_df), full_df.index.min().date(), full_df.index.max().date())
+
+    full_df.to_csv(CSV_FILE)
+    logger.info("Saved full history → %s", CSV_FILE)
+    return full_df
+
+
+# Backwards compatible
+get_btc_30d_closing_prices = lambda force=False: download_btc_recent_market_data(days=30, force_download=force)
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
-    print("\n=== CoinGecko BTC Daily Data Downloader (Clean 1 row per day) ===")
-    print(f"API key: {'Yes (' + key_type + ')' if API_KEY else 'No (public)'}")
-    print(f"Endpoint: {BASE_URL}")
+    print("\n=== CoinGecko BTC Downloader ===")
+    print(f"Key type: {key_type} | Endpoint: {BASE_URL}")
 
-    try:
-        print("\n--- Last 30 days (daily) ---")
-        df30 = download_btc_recent_market_data(days=30)
-        print(f"Loaded {len(df30)} clean daily rows | Latest close: ${df30['close'].iloc[-1]:,.2f}")
+    # Recent example
+    df_recent = download_btc_recent_market_data(days=30)
+    print(f"\nRecent 30 days: {len(df_recent)} clean daily rows")
 
-        print("\n--- Last 5 days (daily) ---")
-        df5 = download_btc_recent_market_data(days=5, force_download=True)
-        print(df5[["close"]].to_string())
-
-        print("\n\u2713 Done! Clean daily data saved. No more duplicate dates.")
-    except Exception as exc:
-        print(f"\nERROR: {exc}")
+    # Full history example (this is what you asked for)
+    print("\nBuilding full history back to 2010 (this may take 30–60 seconds)...")
+    df_full = download_btc_full_daily_history(start_year=2010, force_download=True)
+    print(f"\nFull history ready: {len(df_full):,} daily rows from {df_full.index.min().date()} to {df_full.index.max().date()}")
+    print("Latest 5 closes:")
+    print(df_full[["close"]].tail())
