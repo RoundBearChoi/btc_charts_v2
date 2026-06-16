@@ -244,6 +244,7 @@ def get_price_data(coin: str = "BTC", force_download: bool = False) -> pd.DataFr
 
     if days_behind <= 0:
         logger.info("Cache is up to date (latest: %s). No download needed.", latest_cached_date)
+        print(f"✅ Data is up to date (latest close: {latest_cached_date}). No new days downloaded.")
         return df_cached
 
     # Need to fetch recent data
@@ -268,6 +269,14 @@ def get_price_data(coin: str = "BTC", force_download: bool = False) -> pd.DataFr
 
     # Save updated cache
     combined.to_csv(CSV_FILE)
+
+    # Report how many new days were actually added
+    new_days_added = len(combined) - len(df_cached)
+    if new_days_added > 0:
+        print(f"✅ Downloaded {new_days_added} new day(s). Updated range: {combined.index.min().date()} → {combined.index.max().date()}")
+    else:
+        print("✅ No new days were added (data was already current).")
+
     logger.info("Updated %s cache: now %s rows from %s to %s",
                 coin, len(combined), combined.index.min().date(), combined.index.max().date())
 
