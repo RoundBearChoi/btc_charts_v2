@@ -70,15 +70,12 @@ def draw(block_window=BLOCK_WINDOW, log_scale=LOG_SCALE, days_back=DAYS_BACK, zs
     coin_name = coin_display_names.get(coin_ticker, coin_ticker)
 
     print(f"\nLoading data for {coin_name} ({coin_ticker})...")
-    if coin_ticker == "BTC":
-        data_frame = price_data.get_btc_price_data()
-    else:
-        data_frame = price_data.get_price_data(coin=coin_ticker)
+    data_frame = price_data.get_price_data(coin=coin_ticker)
 
     if days_back is not None:
         data_frame = data_frame.sort_index().iloc[-days_back:]
 
-    # Add 200 SMA for context on price chart (optional but useful)
+    # Add Z-Score (always) + optional 200 SMA for context on price chart
     data_frame = add_zscore(data_frame, window=zscore_window)
     if len(data_frame) >= 200:
         data_frame['SMA200'] = data_frame['close'].rolling(window=200).mean()
