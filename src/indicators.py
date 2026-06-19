@@ -5,6 +5,7 @@ across all chart scripts without duplication.
 """
 
 import pandas as pd
+import numpy as np
 from typing import Optional
 
 
@@ -88,4 +89,35 @@ def add_pi_cycle_top(
     """Add Pi Cycle Top indicators (350 SMA × factor + 111 SMA)."""
     df[f"{sma_350_window}_SMA_top"] = df["close"].rolling(window=sma_350_window).mean() * factor
     df[f"{sma_111_window}_SMA_top"] = df["close"].rolling(window=sma_111_window).mean()
+    return df
+
+
+def add_zscore(
+    df: pd.DataFrame,
+    window: int = 365,
+    price_col: str = "close",
+    out_col: Optional[str] = None,
+) -> pd.DataFrame:
+    """Add rolling Z-Score of the price series.
+
+    Z-Score = (price - rolling_mean) / rolling_std
+    Measures how many standard deviations the current price is from its
+    recent average. Useful for spotting statistical extremes (mean-reversion
+    opportunities or bubble/ capitulation signals).
+
+    Uses min_periods so early values are still computed (after ~30 days min).
+    """
+    if price_col not in df.columns:
+        raise ValueError(f"Column '{price_col}' not found in DataFrame")
+
+    if out_col is None:
+        out_col = f"ZScore_{window}d"
+
+    rolling_mean = df[price_col].rolling(window=window, min_periods=max(30, window // 2)).mean()
+    rolling_std = df[price_col].rolling(window=window, min_periods=max(30, window // 2)).std()
+
+    # Avoid division by zero (extremely rare for BTC prices)
+    rolling_std = rolling_std.replace(0, np.nan)
+
+    df[out_col] = (df[price_col] - rolling_mean) / rolling_std
     return df
