@@ -130,6 +130,7 @@ def load_and_align_data():
 
     # Create clean ratio DataFrame (we treat ratio as the 'price' for indicator reuse)
     ratio_df = pd.DataFrame({'close': ratio_series}, index=common_index)
+    ratio_df.index = pd.to_datetime(ratio_df.index)  # Defensive: ensure proper DatetimeIndex
     ratio_df = ratio_df.sort_index()
 
     # Optional recent window filter (applied after alignment)
@@ -231,11 +232,14 @@ def draw_chart(ratio_df: pd.DataFrame):
     if SHOW_GRID:
         ax.grid(True, alpha=0.25, linestyle='--')
 
-    # Nice date formatting (same pattern as other repo charts)
-    ax.xaxis.set_major_locator(mdates.YearLocator())
-    ax.xaxis.set_minor_locator(mdates.MonthLocator())
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-    plt.setp(ax.get_xticklabels(), rotation=0, ha='center')
+    # Robust date axis handling
+    # AutoDateLocator + fig.autofmt_xdate() adapts well to different time spans.
+    # Using '%Y-%m-%d' so individual days are visible on the x-axis.
+    ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+
+    # Handles rotation, spacing, and prevents labels from being clipped
+    fig.autofmt_xdate(rotation=30, ha='right')
 
     # Y-axis: comma for large numbers or scientific for tiny ratios
     if ratio_df['close'].max() > 1000:
