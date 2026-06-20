@@ -1,29 +1,4 @@
 #!/usr/bin/env python3
-"""
-BTC / FARTCOIN Ratio Chart Generator
-
-Dedicated script for visualizing the BTC:FARTCOIN price ratio using ONLY
-existing cached data files. No downloads, no API calls, no side effects
-on your cryptocompare_data cache.
-
-Follows the established patterns from the btc_charts_v2 repository:
-- Top-level CONFIGURATION section for easy tweaking
-- Direct pandas CSV loading (matching get_price_data_cryptocompare.py format)
-- Reuses indicators.py for SMA/EMA calculations
-- Clean matplotlib financial styling (mdates, ticker, grid, legends)
-- Single-purpose script like price_zscore_chart.py, pi_bottom_top.py, etc.
-- Robust date alignment for overlapping history only
-
-Recommended usage:
-    cd /path/to/btc_charts_v2
-    python src/btc_fartcoin_ratio_chart.py
-
-The script will fail gracefully with a helpful message if the two CSV files
-are missing (they must already exist from previous runs of get_price_data...).
-
-Author: Based on RoundBearChoi's btc_charts_v2 patterns + user request for
-        pure offline ratio analysis.
-"""
 
 import os
 import pandas as pd
@@ -77,15 +52,6 @@ Y_LABEL = f"Price Ratio ({RATIO_NAME})"
 
 
 def load_and_align_data():
-    """Load both CSVs (exact format from get_price_data_cryptocompare.py) and align on common dates.
-    
-    Returns:
-        ratio_df: DataFrame with 'close' = ratio and datetime index (sorted)
-    
-    Raises:
-        FileNotFoundError with helpful message if CSVs missing.
-        ValueError if insufficient overlapping dates.
-    """
     print(f"\nLoading existing data (NO downloads, only local CSVs)...")
     print(f"  BTC cache   : {BTC_CSV}")
     print(f"  FARTCOIN cache: {FART_CSV}")
@@ -182,8 +148,6 @@ def add_moving_averages(ratio_df: pd.DataFrame) -> pd.DataFrame:
 
 def draw_chart(ratio_df: pd.DataFrame):
     """Render the ratio + moving average(s) chart with professional financial styling."""
-    print("\nPreparing chart...")
-
     fig, ax = plt.subplots(figsize=FIGURE_SIZE)
     plt.style.use('fast')
 
@@ -260,17 +224,13 @@ def draw_chart(ratio_df: pd.DataFrame):
     )
 
     plt.tight_layout()
-    print("Drawing chart (close window to exit if BLOCK_WINDOW=True)...")
     plt.show(block=BLOCK_WINDOW)
-    print("Chart closed.")
 
 
 def main():
     print("=" * 70)
     print("BTC / FARTCOIN RATIO CHART  (offline mode - existing data only)")
-    print("=" * 70)
     print("This script strictly uses pre-existing cryptocompare_data/ CSVs.")
-    print("It will NEVER call the CryptoCompare API or trigger downloads.")
     print("=" * 70)
 
     try:
@@ -278,15 +238,8 @@ def main():
         ratio_df = add_moving_averages(ratio_df)
         draw_chart(ratio_df)
 
-        print("\nDone. Analysis tips:")
-        print("  • Rising ratio (BTC/FART) = BTC outperforming FARTCOIN")
-        print("  • Sharp drops in ratio often coincide with memecoin pumps")
-        print("  • Use shorter MA (7d) for recent momentum, longer (30d+) for trend")
-        print("  • Consider running alongside 21_50_200_chart.py on FARTCOIN for context")
-
     except FileNotFoundError as e:
         print(f"\n[ERROR] {e}")
-        print("Fix: Ensure you have run the data downloader for both BTC and FARTCOIN at least once.")
     except Exception as e:
         print(f"\n[ERROR] Unexpected issue: {e}")
         import traceback
