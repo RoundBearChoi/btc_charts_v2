@@ -5,11 +5,10 @@ btc_binance_funding_rates.py
 Clean script for Binance BTCUSDT funding rates.
 Easy config at the top. Focused on recent period.
 
-v3 (2026-06-26): Simplified plotting to fix persistent axis bugs.
-- Removed sharex=True (was causing date formatter to leak to histogram)
-- Let matplotlib auto-handle time axis (most reliable)
-- Independent axes for time series and histogram
-- Kept daily resample + nice formatting + explicit rate zoom on hist
+Final simplified version (2026-06-26):
+- Single clean time series chart only (no histogram)
+- Daily average with green/red fill
+- Proper date formatting for 2-year view
 """
 
 import requests
@@ -105,53 +104,35 @@ def print_stats(df):
 def create_chart(df):
     if df.empty: return
 
-    # Ensure clean DatetimeIndex
     df = df.set_index("timestamp").sort_index()
     if not isinstance(df.index, pd.DatetimeIndex):
         df.index = pd.to_datetime(df.index, utc=True)
 
-    # Daily average for cleaner time series view
     daily = df["funding_rate"].resample("D").mean() * 100
 
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(13, 9), gridspec_kw={"height_ratios": [3.2, 1]})
-    # NOTE: No sharex=True — prevents date formatter leaking to histogram axis
+    fig, ax = plt.subplots(figsize=(13, 7))
 
-    # === Top: Time series ===
-    ax1.plot(daily.index, daily, color="#1f77b4", linewidth=1.3)
-    ax1.fill_between(daily.index, daily, 0, where=(daily >= 0), color="#2ca02c", alpha=0.25)
-    ax1.fill_between(daily.index, daily, 0, where=(daily < 0), color="#d62728", alpha=0.25)
+    ax.plot(daily.index, daily, color="#1f77b4", linewidth=1.4)
+    ax.fill_between(daily.index, daily, 0, where=(daily >= 0), color="#2ca02c", alpha=0.28)
+    ax.fill_between(daily.index, daily, 0, where=(daily < 0), color="#d62728", alpha=0.28)
 
-    ax1.axhline(0, color="#333333", linewidth=0.8, linestyle="--", alpha=0.6)
-    ax1.set_ylim(-0.08, 0.18)
+    ax.axhline(0, color="#333333", linewidth=0.9, linestyle="--", alpha=0.65)
+    ax.set_ylim(-0.08, 0.18)
 
-    ax1.set_ylabel("Funding Rate (%)", fontsize=11)
-    ax1.set_title(f"Binance BTCUSDT Perpetual Funding Rates | Last {LOOKBACK_YEARS} Years", fontsize=13, pad=8)
-    ax1.grid(True, alpha=0.25)
-    ax1.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.2f}%"))
+    ax.set_ylabel("Funding Rate (%)", fontsize=12)
+    ax.set_title(f"Binance BTCUSDT Perpetual Funding Rates | Last {LOOKBACK_YEARS} Years", fontsize=14, pad=10)
+    ax.grid(True, alpha=0.3)
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.2f}%"))
 
-    # Clean quarterly month labels for 2-year view
-    ax1.xaxis.set_major_locator(mdates.MonthLocator(bymonthday=1, interval=3))
-    ax1.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
-    ax1.xaxis.set_minor_locator(mdates.MonthLocator())
-
-    # === Bottom: Histogram (completely independent axis) ===
-    rates = (df["funding_rate"] * 100).dropna()
-    ax2.hist(rates, bins=80, color="#9467bd", alpha=0.78, edgecolor="white", linewidth=0.3)
-    ax2.axvline(0, color="#333333", linewidth=1.2)
-    ax2.set_xlabel("Funding Rate (%)", fontsize=11)
-    ax2.set_ylabel("Count", fontsize=10)
-    ax2.grid(True, alpha=0.25, axis="y")
-    ax2.set_xlim(-0.06, 0.16)   # zoom to actual rate range
-
-    stats = f"Mean {rates.mean():.4f}% | Median {rates.median():.4f}% | Std {rates.std():.4f}%"
-    ax2.text(0.99, 0.95, stats, transform=ax2.transAxes, fontsize=9, ha="right", va="top",
-             bbox=dict(boxstyle="round,pad=0.35", facecolor="white", alpha=0.92))
+    # Clean date formatting for 2-year view
+    ax.xaxis.set_major_locator(mdates.MonthLocator(bymonthday=1, interval=3))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+    ax.xaxis.set_minor_locator(mdates.MonthLocator())
 
     plt.tight_layout()
-    plt.subplots_adjust(hspace=0.1)
 
     out_path = CHART_DIR / f"btc_funding_last{LOOKBACK_YEARS}y_{datetime.now().strftime('%Y%m%d_%H%M')}.png"
-    plt.savefig(out_path, dpi=150, bbox_inches="tight", facecolor="white")
+    plt.savefig(out_path, dpi=160, bbox_inches="tight", facecolor="white")
     print(f"Chart saved → {out_path}")
     plt.close()
 
