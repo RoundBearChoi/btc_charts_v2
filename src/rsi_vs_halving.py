@@ -11,7 +11,7 @@ import get_price_data_cryptocompare as price_data
 # Configuration for the thin vertical cycle-progress lines
 CYCLE_PROGRESS_LINES = {
     'enabled': True,                    # Set to False to hide all % markers
-    'interval_percent': 10,             # ← Change this! (5, 10, 20, 25, 50, etc.)
+    'interval_percent': 5,             # ← Change this! (5, 10, 20, 25, 50, etc.)
     'color': 'black',
     'linestyle': '--',                  # '--' dashed, ':' dotted, '-. ' dash-dot, '-' solid
     'linewidth': 0.8,
@@ -32,11 +32,11 @@ HALVING_MARKERS = {
 # Configuration for horizontal grid lines on the RSI y-axis (new!)
 HORIZONTAL_GRID_LINES = {
     'enabled': True,                    # Set to False to hide horizontal reference lines
-    'levels': [20, 30, 50, 70, 80],     # RSI psychological levels: 30=oversold, 50=neutral, 70=overbought
+    'levels': [20, 30, 40, 50, 60, 70, 80],     # RSI psychological levels: 30=oversold, 50=neutral, 70=overbought
     'color': 'gray',
     'linestyle': ':',                   # dotted for clean, non-distracting reference
-    'linewidth': 0.6,
-    'alpha': 0.35,
+    'linewidth': 1.3,
+    'alpha': 0.4,
     'zorder': 1                         # behind data lines but visible; adjust if needed
 }
 
