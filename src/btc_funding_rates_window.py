@@ -3,12 +3,12 @@
 btc_funding_rates_window.py
 
 Interactive 3-panel chart:
-  1. BTC Price (top)
+  1. BTC Price (top) with 50-day and 111-day SMAs
   2. Daily Funding Rate (middle)
   3. Funding Rate Z-Score (bottom)
 
-This gives excellent context: you can see how price action relates to
-funding pressure and statistical extremes.
+This gives excellent context: you can see how price action (with key moving averages)
+relates to funding pressure and statistical extremes.
 
 Follows the draw() + plt.show() pattern used by other scripts in btc_charts_v2.
 
@@ -133,7 +133,7 @@ def print_stats(df, years: int, zscore_window: int):
 def draw(lookback_years: int = LOOKBACK_YEARS,
          zscore_window: int = ZSCORE_WINDOW_DAYS,
          block_window: bool = True):
-    """Main function: 3-panel chart with BTC Price + Funding Rate + Z-Score."""
+    """Main function: 3-panel chart with BTC Price (with SMAs) + Funding Rate + Z-Score."""
     # === Load Funding Data ===
     funding_df = load_or_update_cache(lookback_years)
     if funding_df.empty:
@@ -159,6 +159,10 @@ def draw(lookback_years: int = LOOKBACK_YEARS,
     if price_df.empty:
         print("Warning: No overlapping BTC price data found.")
         price_df = None
+    else:
+        # Add SMAs similar to sma_vs_sma.py
+        price_df['SMA111'] = price_df['close'].rolling(window=111).mean()
+        price_df['SMA50']  = price_df['close'].rolling(window=50).mean()
 
     # === Create 3-panel figure ===
     fig = plt.figure(figsize=(14, 11))
@@ -170,9 +174,11 @@ def draw(lookback_years: int = LOOKBACK_YEARS,
 
     plt.style.use("fast")
 
-    # --- Panel 1: BTC Price ---
+    # --- Panel 1: BTC Price with SMAs ---
     if price_df is not None:
         ax1.plot(price_df.index, price_df["close"], color="#1f77b4", linewidth=1.3, label="BTC Close")
+        ax1.plot(price_df.index, price_df["SMA111"], color="#ff7f0e", linewidth=1.15, label="111-Day SMA")
+        ax1.plot(price_df.index, price_df["SMA50"],  color="#2ca02c", linewidth=1.15, label="50-Day SMA")
         ax1.set_ylabel("BTC Price (USD)", fontsize=11)
         ax1.legend(loc="upper left", fontsize=9)
         ax1.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"${int(x):,}"))
