@@ -11,7 +11,7 @@ import get_price_data_cryptocompare as price_data
 # Configuration for the thin vertical cycle-progress lines
 CYCLE_PROGRESS_LINES = {
     'enabled': True,                    # Set to False to hide all % markers
-    'interval_percent': 5,             # ← Change this! (5, 10, 20, 25, 50, etc.)
+    'interval_percent': 10,             # ← Change this! (5, 10, 20, 25, 50, etc.)
     'color': 'black',
     'linestyle': '--',                  # '--' dashed, ':' dotted, '-. ' dash-dot, '-' solid
     'linewidth': 0.8,
