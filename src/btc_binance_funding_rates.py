@@ -5,10 +5,11 @@ btc_binance_funding_rates.py
 Clean script for Binance BTCUSDT funding rates.
 Easy config at the top. Focused on recent period.
 
-Final simplified version (2026-06-26):
-- Single clean time series chart only (no histogram)
-- Daily average with green/red fill
-- Proper date formatting for 2-year view
+Final version (2026-06-26):
+- Single clean time series chart
+- Dynamic y-axis zoom with padding (less white space)
+- Daily average + green/red fill
+- Clean quarterly date labels
 """
 
 import requests
@@ -117,7 +118,12 @@ def create_chart(df):
     ax.fill_between(daily.index, daily, 0, where=(daily < 0), color="#d62728", alpha=0.28)
 
     ax.axhline(0, color="#333333", linewidth=0.9, linestyle="--", alpha=0.65)
-    ax.set_ylim(-0.08, 0.18)
+
+    # Dynamic y-axis with padding (removes excessive white space)
+    ymin = daily.min()
+    ymax = daily.max()
+    padding = (ymax - ymin) * 0.20   # 20% headroom
+    ax.set_ylim(ymin - padding, ymax + padding)
 
     ax.set_ylabel("Funding Rate (%)", fontsize=12)
     ax.set_title(f"Binance BTCUSDT Perpetual Funding Rates | Last {LOOKBACK_YEARS} Years", fontsize=14, pad=10)
