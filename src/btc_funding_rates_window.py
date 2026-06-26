@@ -149,9 +149,11 @@ def draw(lookback_years: int = LOOKBACK_YEARS,
     # === Load BTC Price Data (reuse existing module) ===
     print("Loading BTC price data...")
     price_df = price_data.get_btc_price_data()
+
     # Align price to funding date range (with a little buffer)
-    funding_start = daily_funding.index.min() - timedelta(days=5)
-    funding_end = daily_funding.index.max() + timedelta(days=5)
+    # Note: funding index is tz-aware (UTC), price index is tz-naive → convert for slicing
+    funding_start = (daily_funding.index.min() - timedelta(days=5)).tz_localize(None)
+    funding_end = (daily_funding.index.max() + timedelta(days=5)).tz_localize(None)
     price_df = price_df.loc[funding_start:funding_end].copy()
 
     if price_df.empty:
