@@ -2,18 +2,20 @@
 """
 btc_binance_funding_rates.py
 
-Historical BTCUSDT funding rates from Binance + clean chart.
-Focuses on making the long-term view actually readable (y-axis zoom + better visual hierarchy).
+Binance BTCUSDT funding rates - focused on last ~8 years by default.
+Much cleaner and more relevant view.
 """
 
 import requests
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 SYMBOL = "BTCUSDT"
+LOOKBACK_YEARS = 8
+
 CACHE_DIR = Path("src/binance_funding_data")
 CACHE_FILE = CACHE_DIR / "btc_funding_rates.csv"
 CHART_DIR = Path("src/charts")
@@ -22,14 +24,22 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 CHART_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def fetch_binance_funding_history(symbol: str = SYMBOL, start_date: str = "2019-09-01"):
+def get_start_date(years: int = LOOKBACK_YEARS) -> str:
+    """Return date string for N years ago."""
+    return (datetime.now(timezone.utc) - timedelta(days=years * 365)).strftime("%Y-%m-%d")
+
+
+def fetch_binance_funding_history(symbol: str = SYMBOL, start_date: str = None):
+    if start_date is None:
+        start_date = get_start_date()
+
     url = "https://fapi.binance.com/fapi/v1/fundingRate"
     all_records = []
     limit = 1000
     start_ts = int(datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp() * 1000)
     current_start = start_ts
 
-    print(f"Fetching {symbol} funding rates from {start_date}...")
+    print(f"Fetching {symbol} funding rates since {start_date} (~last {LOOKBACK_YEARS} years)...")
     while True:
         params = {"symbol": symbol, "startTime": current_start, "limit": limit}
         try:
@@ -57,6 +67,11 @@ def load_or_update_cache():
     if CACHE_FILE.exists():
         df = pd.read_csv(CACHE_FILE, parse_dates=["timestamp"])
         df["timestamp"] = pd.to_datetime(df["timestamp"], format="mixed", utc=True)
+
+        # Only keep last N years in cache too
+        cutoff = datetime.now(timezone.utc) - timedelta(days=LOOKBACK_YEARS * 365)
+        df = df[df["timestamp"] >= cutoff]
+
         if (datetime.now(timezone.utc) - df["timestamp"].max()).days > 2:
             new_df = fetch_binance_funding_history()
             if not new_df.empty:
@@ -73,7 +88,7 @@ def print_stats(df):
     if df.empty: return
     r = df["funding_rate"] * 100
     print("="*55)
-    print("BTCUSDT Funding Rate Stats (Binance)")
+    print("BTCUSDT Funding Rate Stats (Binance) - Last 8 years")
     print("="*55)
     print(f"Period:          {df['timestamp'].min().date()} → {df['timestamp'].max().date()}")
     print(f"Periods:         {len(df):,}")
@@ -92,53 +107,46 @@ def create_chart(df):
 
     daily = df["funding_rate"].resample("D").mean() * 100
 
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 10), gridspec_kw={"height_ratios": [3.2, 1]}, sharex=True)
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 9), gridspec_kw={"height_ratios": [3.2, 1]}, sharex=True)
 
-    # Main line
-    ax1.plot(daily.index, daily, color="#1f77b4", linewidth=1.1, label="Daily Average")
-
-    # Shaded regions
-    ax1.fill_between(daily.index, daily, 0, where=(daily >= 0), color="#2ca02c", alpha=0.22, label="Positive")
-    ax1.fill_between(daily.index, daily, 0, where=(daily < 0), color="#d62728", alpha=0.22, label="Negative")
+    ax1.plot(daily.index, daily, color="#1f77b4", linewidth=1.2, label="Daily Average")
+    ax1.fill_between(daily.index, daily, 0, where=(daily >= 0), color="#2ca02c", alpha=0.22)
+    ax1.fill_between(daily.index, daily, 0, where=(daily < 0), color="#d62728", alpha=0.22)
 
     ax1.axhline(0, color="#333333", linewidth=0.9, linestyle="--", alpha=0.6)
-
-    # === KEY FIX: reasonable y-axis zoom so recent action is visible ===
-    ax1.set_ylim(-0.08, 0.18)   # Focus on typical range; big spikes will still show
+    ax1.set_ylim(-0.08, 0.18)
 
     ax1.set_ylabel("Funding Rate (%)", fontsize=11)
-    ax1.set_title(f"Binance BTCUSDT Perpetual Funding Rates  |  2019-09 — 2026-06", fontsize=13, pad=8)
-    ax1.legend(loc="upper left", fontsize=9)
+    ax1.set_title(f"Binance BTCUSDT Funding Rates | Last {LOOKBACK_YEARS} years", fontsize=13, pad=8)
     ax1.grid(True, alpha=0.25)
     ax1.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.2f}%"))
 
     ax1.xaxis.set_major_locator(mdates.YearLocator())
     ax1.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
-    ax1.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=[1,7]))
 
-    # Histogram (bottom)
+    # Histogram
     rates = df["funding_rate"] * 100
-    ax2.hist(rates, bins=90, color="#9467bd", alpha=0.75, edgecolor="white", linewidth=0.3)
+    ax2.hist(rates, bins=80, color="#9467bd", alpha=0.75, edgecolor="white", linewidth=0.3)
     ax2.axvline(0, color="#333333", linewidth=1.2)
     ax2.set_xlabel("Funding Rate (%)", fontsize=11)
     ax2.set_ylabel("Count", fontsize=10)
     ax2.grid(True, alpha=0.25, axis="y")
 
-    stats = f"Mean {rates.mean():.4f}%  |  Median {rates.median():.4f}%  |  Std {rates.std():.4f}%  |  +85.3% periods"
+    stats = f"Mean {rates.mean():.4f}% | Median {rates.median():.4f}% | Std {rates.std():.4f}%"
     ax2.text(0.99, 0.95, stats, transform=ax2.transAxes, fontsize=9, ha="right", va="top",
              bbox=dict(boxstyle="round,pad=0.35", facecolor="white", alpha=0.92))
 
     plt.tight_layout()
     plt.subplots_adjust(hspace=0.08)
 
-    out_path = CHART_DIR / f"btc_binance_funding_rates_{datetime.now().strftime('%Y%m%d_%H%M')}.png"
+    out_path = CHART_DIR / f"btc_funding_last{LOOKBACK_YEARS}y_{datetime.now().strftime('%Y%m%d_%H%M')}.png"
     plt.savefig(out_path, dpi=150, bbox_inches="tight", facecolor="white")
     print(f"Chart saved → {out_path}")
     plt.close()
 
 
 if __name__ == "__main__":
-    print("\n=== Binance BTC Funding Rates ===\n")
+    print("\n=== Binance BTC Funding Rates (Last 8 years) ===\n")
     df = load_or_update_cache()
     print_stats(df)
     create_chart(df)
