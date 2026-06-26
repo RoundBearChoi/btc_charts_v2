@@ -13,7 +13,7 @@ CYCLE_PROGRESS_LINES = {
     'enabled': True,                    # Set to False to hide all % markers
     'interval_percent': 10,             # ← Change this! (5, 10, 20, 25, 50, etc.)
     'color': 'black',
-    'linestyle': '--',                  # '--' dashed, ':' dotted, '-.' dash-dot, '-' solid
+    'linestyle': '--',                  # '--' dashed, ':' dotted, '-. ' dash-dot, '-' solid
     'linewidth': 0.8,
     'alpha': 0.5,
     'zorder': 0
@@ -27,6 +27,17 @@ HALVING_MARKERS = {
     'linewidth': 1.7,                   # thicker than progress lines
     'alpha': 0.5,
     'zorder': 2                         # drawn on top of progress lines
+}
+
+# Configuration for horizontal grid lines on the RSI y-axis (new!)
+HORIZONTAL_GRID_LINES = {
+    'enabled': True,                    # Set to False to hide horizontal reference lines
+    'levels': [20, 30, 50, 70, 80],     # RSI psychological levels: 30=oversold, 50=neutral, 70=overbought
+    'color': 'gray',
+    'linestyle': ':',                   # dotted for clean, non-distracting reference
+    'linewidth': 0.6,
+    'alpha': 0.35,
+    'zorder': 1                         # behind data lines but visible; adjust if needed
 }
 
 # Bitcoin halving dates (update future ones as needed)
@@ -99,6 +110,22 @@ def __plot(data_frame, block_window):
                 zorder=HALVING_MARKERS['zorder']
             )
 
+    # === 3. Horizontal RSI grid / reference lines (new!) ===
+    if HORIZONTAL_GRID_LINES['enabled']:
+        for y_level in HORIZONTAL_GRID_LINES['levels']:
+            plt.axhline(
+                y=y_level,
+                color=HORIZONTAL_GRID_LINES['color'],
+                linestyle=HORIZONTAL_GRID_LINES['linestyle'],
+                linewidth=HORIZONTAL_GRID_LINES['linewidth'],
+                alpha=HORIZONTAL_GRID_LINES['alpha'],
+                zorder=HORIZONTAL_GRID_LINES['zorder']
+            )
+
+    # Improve y-axis for RSI (bounded 0-100) so horizontal lines display cleanly
+    plt.ylim(0, 100)
+    plt.ylabel('RSI')
+
     # plot RSI (original logic unchanged)
     norm = plt.Normalize(0, 50)
 
@@ -121,12 +148,12 @@ def __plot(data_frame, block_window):
 
     plt.title(
         f'Monthly RSI vs Next Halving '
-        f'({CYCLE_PROGRESS_LINES["interval_percent"]}% markers + halving lines)'
+        f'({CYCLE_PROGRESS_LINES["interval_percent"]}% markers + halving lines + horizontal grids)'
     )
 
     print(
         f'\nDrawing Monthly RSI vs Next Halving '
-        f'(with {CYCLE_PROGRESS_LINES["interval_percent"]}% cycle markers + halving lines)..'
+        f'(with {CYCLE_PROGRESS_LINES["interval_percent"]}% cycle markers + halving lines + horizontal grids)..'
     )
 
     plt.show(block=block_window)
