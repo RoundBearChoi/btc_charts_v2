@@ -6,7 +6,7 @@ Fetches historical BTCUSDT Perpetual funding rates from Binance Futures public A
 Caches results locally.
 Generates clean statistics + a proper long-term chart with correct datetime x-axis.
 
-Improved version with robust datetime handling and better visualization for multi-year data.
+Robust datetime parsing to handle existing cache files.
 """
 
 import requests
@@ -71,8 +71,8 @@ def load_or_update_cache():
     if CACHE_FILE.exists():
         print("Loading cache...")
         df = pd.read_csv(CACHE_FILE, parse_dates=["timestamp"])
-        # Force proper datetime + UTC
-        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+        # Robust parsing for existing cache files that may have microseconds + timezone
+        df["timestamp"] = pd.to_datetime(df["timestamp"], format="mixed", utc=True)
         latest = df["timestamp"].max()
         if (datetime.now(timezone.utc) - latest).days > 2:
             print("Cache stale — fetching updates...")
@@ -116,19 +116,16 @@ def create_chart(df):
 
     # Ensure proper DatetimeIndex
     df = df.set_index("timestamp").sort_index()
-    # Safety: make sure index is DatetimeIndex
     if not isinstance(df.index, pd.DatetimeIndex):
         df.index = pd.to_datetime(df.index, utc=True)
 
-    # Resample to daily average for clean long-term view (much better than raw 8h scatter over 7 years)
+    # Resample to daily average for clean long-term view
     daily = df["funding_rate"].resample("D").mean() * 100
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 9), gridspec_kw={"height_ratios": [3, 1]}, sharex=True)
 
-    # === Top: Daily average funding rate line ===
     ax1.plot(daily.index, daily, color="#2980b9", linewidth=1.2, label="Daily Avg Funding Rate")
 
-    # Fill positive (green) / negative (red) areas
     ax1.fill_between(daily.index, daily, 0, where=(daily >= 0), color="#27ae60", alpha=0.25, label="Positive (longs pay)")
     ax1.fill_between(daily.index, daily, 0, where=(daily < 0), color="#c0392b", alpha=0.25, label="Negative (shorts pay)")
 
@@ -139,12 +136,10 @@ def create_chart(df):
     ax1.grid(True, alpha=0.3)
     ax1.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.3f}%"))
 
-    # Explicit date formatting (critical fix for long time range)
     ax1.xaxis.set_major_locator(mdates.YearLocator())
     ax1.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
     ax1.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=[1, 7]))
 
-    # === Bottom: Distribution ===
     rates = df["funding_rate"] * 100
     ax2.hist(rates, bins=80, color="#8e44ad", alpha=0.7, edgecolor="white", linewidth=0.4)
     ax2.axvline(0, color="#2c3e50", linewidth=1.5)
@@ -153,7 +148,6 @@ def create_chart(df):
     ax2.set_title("Distribution of Daily-Averaged Funding Rates", fontsize=11)
     ax2.grid(True, alpha=0.3, axis="y")
 
-    # Stats box
     stats = f"Mean: {rates.mean():.4f}%  |  Median: {rates.median():.4f}%  |  Std: {rates.std():.4f}%"
     ax2.text(0.99, 0.96, stats, transform=ax2.transAxes, fontsize=9,
              ha="right", va="top", bbox=dict(boxstyle="round,pad=0.4", facecolor="white", alpha=0.9))
