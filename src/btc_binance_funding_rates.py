@@ -4,6 +4,12 @@ btc_binance_funding_rates.py
 
 Clean script for Binance BTCUSDT funding rates.
 Easy config at the top. Focused on recent period.
+
+Improvements (2026-06-26):
+- Stronger DatetimeIndex handling + explicit xlim to prevent 1960s axis bug
+- Better tick formatting for ~2 year window (quarterly months)
+- Histogram zoomed to meaningful rate range
+- Minor visual polish
 """
 
 import requests
@@ -105,31 +111,37 @@ def create_chart(df):
 
     daily = df["funding_rate"].resample("D").mean() * 100
 
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(13, 9), gridspec_kw={"height_ratios": [3.2, 1]}, sharex=True)
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 9), gridspec_kw={"height_ratios": [3.2, 1]}, sharex=True)
 
     # Time series
-    ax1.plot(daily.index, daily, color="#1f77b4", linewidth=1.3, label="Daily Avg")
-    ax1.fill_between(daily.index, daily, 0, where=(daily >= 0), color="#2ca02c", alpha=0.25)
-    ax1.fill_between(daily.index, daily, 0, where=(daily < 0), color="#d62728", alpha=0.25)
+    ax1.plot(daily.index, daily, color="#1f77b4", linewidth=1.4, label="Daily Avg Funding Rate")
+    ax1.fill_between(daily.index, daily, 0, where=(daily >= 0), color="#2ca02c", alpha=0.28)
+    ax1.fill_between(daily.index, daily, 0, where=(daily < 0), color="#d62728", alpha=0.28)
 
-    ax1.axhline(0, color="#333333", linewidth=0.9, linestyle="--", alpha=0.6)
+    ax1.axhline(0, color="#333333", linewidth=0.9, linestyle="--", alpha=0.7)
     ax1.set_ylim(-0.08, 0.18)
 
     ax1.set_ylabel("Funding Rate (%)", fontsize=11)
-    ax1.set_title(f"Binance BTCUSDT Perpetual Funding Rates | Last {LOOKBACK_YEARS} Years", fontsize=13, pad=8)
+    ax1.set_title(f"Binance BTCUSDT Perpetual Funding Rates | Last {LOOKBACK_YEARS} Years", fontsize=13, pad=10)
     ax1.grid(True, alpha=0.25)
     ax1.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.2f}%"))
 
-    ax1.xaxis.set_major_locator(mdates.YearLocator())
-    ax1.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+    # Much better for a ~2 year window than YearLocator()
+    ax1.xaxis.set_major_locator(mdates.MonthLocator(bymonthday=1, interval=3))
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+    ax1.xaxis.set_minor_locator(mdates.MonthLocator())
 
-    # === HISTOGRAM - make sure we only pass rates, not timestamps ===
+    # Explicit limits (prevents weird auto-scaling to 1960s if anything goes wrong)
+    ax1.set_xlim(daily.index.min(), daily.index.max())
+
+    # === HISTOGRAM - only rates, zoomed to sensible range ===
     rates = (df["funding_rate"] * 100).dropna()
-    ax2.hist(rates, bins=70, color="#9467bd", alpha=0.78, edgecolor="white", linewidth=0.3)
+    ax2.hist(rates, bins=80, color="#9467bd", alpha=0.78, edgecolor="white", linewidth=0.3)
     ax2.axvline(0, color="#333333", linewidth=1.3)
     ax2.set_xlabel("Funding Rate (%)", fontsize=11)
     ax2.set_ylabel("Count", fontsize=10)
     ax2.grid(True, alpha=0.25, axis="y")
+    ax2.set_xlim(-0.06, 0.16)
 
     stats = f"Mean {rates.mean():.4f}% | Median {rates.median():.4f}% | Std {rates.std():.4f}%"
     ax2.text(0.99, 0.95, stats, transform=ax2.transAxes, fontsize=9, ha="right", va="top",
@@ -139,7 +151,7 @@ def create_chart(df):
     plt.subplots_adjust(hspace=0.08)
 
     out_path = CHART_DIR / f"btc_funding_last{LOOKBACK_YEARS}y_{datetime.now().strftime('%Y%m%d_%H%M')}.png"
-    plt.savefig(out_path, dpi=150, bbox_inches="tight", facecolor="white")
+    plt.savefig(out_path, dpi=160, bbox_inches="tight", facecolor="white")
     print(f"Chart saved → {out_path}")
     plt.close()
 
