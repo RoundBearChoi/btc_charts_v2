@@ -54,7 +54,6 @@ def get_coin_choice() -> str:
         else:
             print("✘ Invalid. Try 1, 2, 3 or type a ticker.")
 
-
 def add_rsi(data_frame, window=14):
     delta = data_frame['close'].diff()
     gain = delta.where(delta > 0, 0)
@@ -69,7 +68,6 @@ def add_rsi(data_frame, window=14):
     rs = avg_gain / avg_loss
     data_frame['RSI'] = 100 - (100 / (1 + rs))
     return data_frame
-
 
 def draw(block_window=BLOCK_WINDOW, log_scale=LOG_SCALE, days_back=DAYS_BACK, rsi_window=RSI_WINDOW):
     coin_ticker = get_coin_choice()
@@ -150,10 +148,29 @@ def draw(block_window=BLOCK_WINDOW, log_scale=LOG_SCALE, days_back=DAYS_BACK, rs
     if SHOW_GRID: 
         ax3.grid(True, alpha=0.3)
 
-    ax3.xaxis.set_major_locator(mdates.YearLocator())
+    # ==================================================
+    # IMPROVED X-AXIS DATE LABELING
+    # Problem: YearLocator() + DateFormatter('%Y-%m') only placed major ticks at January of each year,
+    #          so only January-ish labels (e.g. 2020-01) appeared in text on the x-axis.
+    # Solution: Switch major locator to MonthLocator(interval=3) so ticks every 3 months (Jan/Apr/Jul/Oct),
+    #           and format as '%b %Y' (e.g. "Jan 2024", "Apr 2024") to show actual month names.
+    #           This displays *more months* as readable text labels while keeping the chart clean.
+    #           Minor locator still provides every-month ticks (useful for grid alignment if extended).
+    # Nuances & alternatives explored:
+    #   - interval=1 (every month): too dense for 8-year view (~100 labels) → labels would overlap heavily.
+    #   - interval=6 (Jan/Jul only): sparser, still shows month names but fewer.
+    #   - mdates.AutoDateLocator() + mdates.ConciseDateFormatter(): smart/auto density + nice short labels
+    #     (e.g. "2020", "Jan '21", "Jul"); great for interactive/zoomable but here static plot benefits from explicit.
+    #   - For shorter ranges (small DAYS_BACK) you could use interval=1 + rotation=45 + smaller fontsize.
+    #   - Edge case: full history (DAYS_BACK=None) or very long spans → consider lowering to interval=6 or using Auto.
+    #   - sharex=True means only bottom axis (ax3) shows labels; this is standard and correct.
+    # Recommendation: Run with your usual DAYS_BACK=360*8 first. If labels feel crowded, change interval=6.
+    # ==================================================
+    ax3.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
     ax3.xaxis.set_minor_locator(mdates.MonthLocator())
-    ax3.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-    plt.xticks(rotation=0)
+    ax3.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
+    ax3.tick_params(axis='x', which='major', labelsize=9)
+
     plt.xlabel('Date')
     plt.tight_layout()
 
