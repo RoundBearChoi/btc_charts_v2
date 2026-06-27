@@ -39,7 +39,7 @@ SHOW_ABSOLUTE_REFS = True
 ABS_MODERATE = 0.025
 ABS_HIGH     = 0.04
 
-CACHE_DIR = Path("src/binance_funding_data")
+CACHE_DIR = Path("binance_funding_data")
 CACHE_FILE = CACHE_DIR / "btc_funding_rates.csv"
 
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
