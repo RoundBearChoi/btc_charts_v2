@@ -28,5 +28,3 @@ python src/rsi_vs_halving.py
 | `get_price_data_cryptocompare.py`   | Data downloader + cache                  |
 
 Data cached in `src/cryptocompare_data/`.
-
-Default branch: `incremental-coindesk-update`
