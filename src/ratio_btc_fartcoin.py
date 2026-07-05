@@ -141,7 +141,6 @@ def load_and_align_data():
 
     return ratio_df
 
-
 def add_moving_averages(ratio_df: pd.DataFrame) -> pd.DataFrame:
     """Add SMA or EMA columns using the shared indicators module.
     
@@ -172,7 +171,6 @@ def add_moving_averages(ratio_df: pd.DataFrame) -> pd.DataFrame:
             print(f"  Added {out_col}")
 
     return ratio_df
-
 
 def add_extremes_indicator(ratio_df: pd.DataFrame) -> pd.DataFrame:
     """Add Z-score or RSI indicator for the bottom panel.
@@ -213,7 +211,6 @@ def add_extremes_indicator(ratio_df: pd.DataFrame) -> pd.DataFrame:
         print(f"  [WARN] BOTTOM_INDICATOR='{BOTTOM_INDICATOR}' not recognized. Supported: 'zscore', 'rsi'. Skipping bottom panel.")
 
     return ratio_df
-
 
 def draw_chart(ratio_df: pd.DataFrame):
     """Render the ratio + MAs (top) and optional extremes indicator (bottom) with professional styling.
@@ -290,12 +287,6 @@ def draw_chart(ratio_df: pd.DataFrame):
     ax_top.legend(loc='upper left', framealpha=0.92, fontsize=9)
     if SHOW_GRID:
         ax_top.grid(True, alpha=0.22, linestyle='--')
-
-    # Robust date axis handling (only set on top if no bottom; bottom will control shared axis)
-    if not has_bottom:
-        ax_top.xaxis.set_major_locator(mdates.AutoDateLocator())
-        ax_top.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-        fig.autofmt_xdate(rotation=30, ha='right')
 
     # Y-axis: comma for large numbers or scientific for tiny ratios
     if ratio_df['close'].max() > 1000:
@@ -402,9 +393,12 @@ def draw_chart(ratio_df: pd.DataFrame):
 
         ax_bot.set_xlabel('Date', fontsize=10)
 
-        # Date formatting only on the bottom axis (shared with top)
+        # ==================================================
+        # X-AXIS DATE FORMATTING (unified with other charts)
+        # Using '%Y-%m' for consistency across btc_charts_v2
+        # ==================================================
         ax_bot.xaxis.set_major_locator(mdates.AutoDateLocator())
-        ax_bot.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        ax_bot.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
         fig.autofmt_xdate(rotation=30, ha='right')
 
         # Subtle bottom panel title / interpretation
@@ -415,9 +409,15 @@ def draw_chart(ratio_df: pd.DataFrame):
             )
         elif BOTTOM_INDICATOR == "rsi":
             ax_bot.set_title(
-                "RSI on Ratio: >70 momentum overbought (ratio rose too fast)  |  <30 momentum oversold (ratio fell too fast)",
+                "RSI on Ratio: >70 momentum overbought (ratio rose too fast)  |  <30 momentum oversold (falling too fast)",
                 fontsize=8, pad=4, style='italic', color='#34495E'
             )
+
+    else:
+        # No bottom panel: format top axis directly
+        ax_top.xaxis.set_major_locator(mdates.AutoDateLocator())
+        ax_top.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+        fig.autofmt_xdate(rotation=30, ha='right')
 
     plt.tight_layout()
     plt.show(block=BLOCK_WINDOW)
