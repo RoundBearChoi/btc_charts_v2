@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+import matplotlib.dates as mdates
 import pandas as pd
 from pandas.tseries.offsets import MonthEnd
 import requests
@@ -40,8 +41,8 @@ def draw(block_window):
     df = pd.DataFrame({'BTC': monthly_btc['close'], 'US_M2': us_m2})
     df = df.dropna()
 
-    # Create the plot
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), gridspec_kw={'height_ratios': [3, 1]})
+    # Create the plot with shared x-axis for linked zooming/panning
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), gridspec_kw={'height_ratios': [3, 1]}, sharex=True)
     plt.style.use('fast')
 
     # Top: BTC price
@@ -52,6 +53,12 @@ def draw(block_window):
     ax1.legend(loc='upper left')
     ax1.grid(False)
 
+    # Format x-axis: years major, every 3 months minor with labels
+    ax1.xaxis.set_major_locator(mdates.YearLocator())
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+    ax1.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=[1, 4, 7, 10]))  # Jan, Apr, Jul, Oct
+    ax1.xaxis.set_minor_formatter(mdates.DateFormatter('%b'))
+
     # Bottom: US M2
     ax2.plot(df.index, df['US_M2'], label='US M2 (Billions USD)', color='blue', linewidth=0.85)
     ax2.set_ylabel('M2 (Billions USD)')
@@ -59,8 +66,17 @@ def draw(block_window):
     ax2.legend(loc='upper left')
     ax2.grid(False)
 
+    # Same x-axis formatting for bottom (sharex ensures sync)
+    ax2.xaxis.set_major_locator(mdates.YearLocator())
+    ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+    ax2.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=[1, 4, 7, 10]))
+    ax2.xaxis.set_minor_formatter(mdates.DateFormatter('%b'))
+
+    # Optional: rotate x labels if crowded
+    # plt.setp(ax2.get_xticklabels(which='both'), rotation=45, ha='right')
+
     plt.tight_layout()
-    print('Drawing US M2 (bottom) vs BTC Price (top) — using latest FRED CSV data')
+    print('Drawing US M2 (bottom) vs BTC Price (top) — quarterly month markers on x-axis')
     plt.show(block=block_window)
 
 
