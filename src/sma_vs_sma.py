@@ -140,15 +140,16 @@ def draw(block_window=BLOCK_WINDOW, rsi_window=RSI_WINDOW, volume_sma_days=VOLUM
 
     # ==================================================
     # X-AXIS DATE FORMATTING (improved for long histories)
-    # Uses MonthLocator(interval=3) so major ticks/labels at Jan/Apr/Jul/Oct
-    # with readable '%b %Y' format. This avoids the overcrowding problem of
-    # every-month labels on 5-10+ year charts while keeping context.
-    # Minor ticks (every month) help with grid alignment.
-    # sharex=True means labels only appear on bottom panel (ax3).
+    # Uses MonthLocator(interval=3) so major ticks/labels every 3 months
+    # (e.g. at Jan/Apr/Jul/Oct positions) with clear '%Y-%m' format
+    # (example: 2027-07 for July 2027). This keeps labels readable and
+    # avoids overcrowding on 5-10+ year charts. Minor ticks (every month)
+    # help with grid alignment. sharex=True means x-labels only appear
+    # on the bottom panel (ax3).
     # ==================================================
     ax3.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
     ax3.xaxis.set_minor_locator(mdates.MonthLocator())
-    ax3.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
+    ax3.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
     ax3.tick_params(axis='x', which='major', labelsize=9)
 
     plt.xlabel('Date')
