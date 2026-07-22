@@ -273,7 +273,15 @@ def get_price_data(coin: str = "BTC", force_download: bool = False) -> pd.DataFr
     # Report how many new days were actually added
     new_days_added = len(combined) - len(df_cached)
     if new_days_added > 0:
-        print(f"✅ Downloaded {new_days_added} new day(s). Updated range: {combined.index.min().date()} → {combined.index.max().date()}")
+        added_start = latest_cached_date + dt.timedelta(days=1)
+        added_end = combined.index.max().date()
+        total_start = combined.index.min().date()
+        total_end = combined.index.max().date()
+        print(
+            f"✅ Downloaded {new_days_added} new day(s). "
+            f"Added range: {added_start} → {added_end} | "
+            f"Total range: {total_start} → {total_end}"
+        )
     else:
         print("✅ No new days were added (data was already current).")
 
