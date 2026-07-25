@@ -91,9 +91,9 @@ ZSCORE_EXTRA_COLOR_LOW = '#27AE60'    # Negative extra levels
 
 # Bottom panel grid (the faint lines at automatic tick positions, e.g. -0.71 etc.)
 BOTTOM_GRID = True
-BOTTOM_GRID_COLOR = '#888888'
-BOTTOM_GRID_WIDTH = 0.7
-BOTTOM_GRID_ALPHA = 0.25
+BOTTOM_GRID_COLOR = '#707070'
+BOTTOM_GRID_WIDTH = 1.0
+BOTTOM_GRID_ALPHA = 0.5
 BOTTOM_GRID_STYLE = ':'              # ':', '--', '-.', '-'
 # =============================================================================
 # END OF CONFIGURATION
