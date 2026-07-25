@@ -78,8 +78,8 @@ THRESHOLD_COLOR_HIGH = '#E74C3C'
 THRESHOLD_COLOR_LOW = '#27AE60'
 
 # Line thicknesses & mean color (Z-score panel)
-ZSCORE_LINE_WIDTH = 2.0          # Main Z-score series
-ZSCORE_MEAN_WIDTH = 1.5           # Zero / mean line
+ZSCORE_LINE_WIDTH = 1.6
+ZSCORE_MEAN_WIDTH = 1.25
 ZSCORE_THRESHOLD_WIDTH = 1.15     # Primary ±2 thresholds
 ZSCORE_EXTRA_WIDTH = 1.5         # Extra levels (±1, ±3)
 ZSCORE_MEAN_COLOR = '#5D6D7E'     # Color for the mean (0) line
@@ -97,9 +97,9 @@ BOTTOM_GRID_STYLE = ':'              # ':', '--', '-.', '-'
 
 # Top panel grid
 TOP_GRID = True
-TOP_GRID_COLOR = '#888888'
+TOP_GRID_COLOR = '#707070'
 TOP_GRID_WIDTH = 0.7
-TOP_GRID_ALPHA = 0.22
+TOP_GRID_ALPHA = 0.5
 TOP_GRID_STYLE = '--'                # ':', '--', '-.', '-'
 # =============================================================================
 # END OF CONFIGURATION
