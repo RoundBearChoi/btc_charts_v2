@@ -22,7 +22,6 @@ FART_CSV = os.path.join(DATA_DIR, "cryptocompare_historic_fartcoin_price.csv")
 # Chart behavior
 BLOCK_WINDOW = True          # True = script waits for you to close plot window
 DAYS_BACK = None             # e.g. 365*2 for last 2 years; None = full overlapping history
-SHOW_GRID = True
 FIGURE_SIZE = (14, 9)        # (14, 8) original single panel; (14, 9-10) recommended when bottom indicator enabled for better proportions
 
 # Moving Average settings (you can add more by extending the list)
@@ -95,6 +94,13 @@ BOTTOM_GRID_COLOR = '#707070'
 BOTTOM_GRID_WIDTH = 1.0
 BOTTOM_GRID_ALPHA = 0.5
 BOTTOM_GRID_STYLE = ':'              # ':', '--', '-.', '-'
+
+# Top panel grid
+TOP_GRID = True
+TOP_GRID_COLOR = '#888888'
+TOP_GRID_WIDTH = 0.7
+TOP_GRID_ALPHA = 0.22
+TOP_GRID_STYLE = '--'                # ':', '--', '-.', '-'
 # =============================================================================
 # END OF CONFIGURATION
 # =============================================================================
@@ -306,8 +312,14 @@ def draw_chart(ratio_df: pd.DataFrame):
         ax_top.set_xlabel('Date', fontsize=10)
 
     ax_top.legend(loc='upper left', framealpha=0.92, fontsize=9)
-    if SHOW_GRID:
-        ax_top.grid(True, alpha=0.22, linestyle='--')
+    if TOP_GRID:
+        ax_top.grid(
+            True,
+            color=TOP_GRID_COLOR,
+            linewidth=TOP_GRID_WIDTH,
+            alpha=TOP_GRID_ALPHA,
+            linestyle=TOP_GRID_STYLE
+        )
 
     # Y-axis: comma for large numbers or scientific for tiny ratios
     if ratio_df['close'].max() > 1000:
