@@ -77,6 +77,13 @@ BOTTOM_LINE_COLOR_Z = '#C0392B'   # Strong red for Z-score visibility
 BOTTOM_LINE_COLOR_RSI = '#8E44AD' # Purple for RSI
 THRESHOLD_COLOR_HIGH = '#E74C3C'
 THRESHOLD_COLOR_LOW = '#27AE60'
+
+# Line thicknesses & mean color (Z-score panel)
+ZSCORE_LINE_WIDTH = 1.35          # Main Z-score series
+ZSCORE_MEAN_WIDTH = 1.0           # Zero / mean line
+ZSCORE_THRESHOLD_WIDTH = 1.15     # Primary ±2 thresholds
+ZSCORE_EXTRA_WIDTH = 0.85         # Extra levels (±1, ±3)
+ZSCORE_MEAN_COLOR = '#5D6D7E'     # Color for the mean (0) line
 # =============================================================================
 # END OF CONFIGURATION
 # =============================================================================
@@ -320,15 +327,15 @@ def draw_chart(ratio_df: pd.DataFrame):
                     zseries,
                     label=z_col,
                     color=BOTTOM_LINE_COLOR_Z,
-                    linewidth=1.35,
+                    linewidth=ZSCORE_LINE_WIDTH,
                     alpha=0.95
                 )
 
                 # Reference lines for statistical extremes (primary thresholds)
-                ax_bot.axhline(0, color='#5D6D7E', linewidth=1.0, linestyle='-', alpha=0.65, label='Mean (0)')
-                ax_bot.axhline(ZSCORE_OVER, color=THRESHOLD_COLOR_HIGH, linewidth=1.15, linestyle='--', alpha=0.9,
+                ax_bot.axhline(0, color=ZSCORE_MEAN_COLOR, linewidth=ZSCORE_MEAN_WIDTH, linestyle='-', alpha=0.65, label='Mean (0)')
+                ax_bot.axhline(ZSCORE_OVER, color=THRESHOLD_COLOR_HIGH, linewidth=ZSCORE_THRESHOLD_WIDTH, linestyle='--', alpha=0.9,
                                label=f'High (+{ZSCORE_OVER}σ)')
-                ax_bot.axhline(ZSCORE_UNDER, color=THRESHOLD_COLOR_LOW, linewidth=1.15, linestyle='--', alpha=0.9,
+                ax_bot.axhline(ZSCORE_UNDER, color=THRESHOLD_COLOR_LOW, linewidth=ZSCORE_THRESHOLD_WIDTH, linestyle='--', alpha=0.9,
                                label=f'Low ({ZSCORE_UNDER}σ)')
 
                 # Additional horizontal lines for finer granularity (±1 mild, ±3 extreme)
@@ -343,7 +350,7 @@ def draw_chart(ratio_df: pd.DataFrame):
                     ax_bot.axhline(
                         level,
                         color=color,
-                        linewidth=0.85,
+                        linewidth=ZSCORE_EXTRA_WIDTH,
                         linestyle=':',
                         alpha=0.55
                     )
