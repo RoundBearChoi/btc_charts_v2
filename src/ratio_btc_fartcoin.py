@@ -84,6 +84,10 @@ ZSCORE_MEAN_WIDTH = 1.5           # Zero / mean line
 ZSCORE_THRESHOLD_WIDTH = 1.15     # Primary ±2 thresholds
 ZSCORE_EXTRA_WIDTH = 1.5         # Extra levels (±1, ±3)
 ZSCORE_MEAN_COLOR = '#5D6D7E'     # Color for the mean (0) line
+
+# Colors for extra horizontal lines (±1, ±3)
+ZSCORE_EXTRA_COLOR_HIGH = '#E74C3C'   # Positive extra levels
+ZSCORE_EXTRA_COLOR_LOW = '#27AE60'    # Negative extra levels
 # =============================================================================
 # END OF CONFIGURATION
 # =============================================================================
@@ -344,9 +348,9 @@ def draw_chart(ratio_df: pd.DataFrame):
                     if level == 0:
                         continue  # already handled
                     if level > 0:
-                        color = THRESHOLD_COLOR_HIGH
+                        color = ZSCORE_EXTRA_COLOR_HIGH
                     else:
-                        color = THRESHOLD_COLOR_LOW
+                        color = ZSCORE_EXTRA_COLOR_LOW
                     ax_bot.axhline(
                         level,
                         color=color,
