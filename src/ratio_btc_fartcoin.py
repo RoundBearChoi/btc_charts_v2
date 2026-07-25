@@ -65,9 +65,10 @@ RSI_WINDOW = 14               # Standard for RSI momentum
 # Visual thresholds (horizontal reference lines)
 ZSCORE_OVER = 2.0             # +2 std devs = ratio unusually HIGH (potential overextension / mean-reversion candidate)
 ZSCORE_UNDER = -2.0           # -2 std devs = ratio unusually LOW
-# Additional horizontal lines for finer granularity (mild ±1 and extreme ±3)
-# These help visualize intermediate and more extreme deviations without cluttering the main ±2 thresholds.
-ZSCORE_EXTRA_LEVELS = [1.0, -1.0, 3.0, -3.0]
+# Additional horizontal lines for extreme deviations (±3). Mild ±1 lines are drawn
+# using the bottom panel grid style (color/width/alpha/style) instead of having
+# their own config entries.
+ZSCORE_EXTRA_LEVELS = [3.0, -3.0]
 RSI_OVERBOUGHT = 70
 RSI_OVERSOLD = 30
 
@@ -84,11 +85,12 @@ ZSCORE_THRESHOLD_WIDTH = 1.2
 ZSCORE_EXTRA_WIDTH = 1.2
 ZSCORE_MEAN_COLOR = '#9F99A1'
 
-# Colors for extra horizontal lines (±1, ±3)
+# Colors for extra horizontal lines (±3)
 ZSCORE_EXTRA_COLOR_HIGH = '#E74C3C'   # Positive extra levels
 ZSCORE_EXTRA_COLOR_LOW = '#27AE60'    # Negative extra levels
 
 # Bottom panel grid (the faint lines at automatic tick positions, e.g. -0.71 etc.)
+# Also used for the mild ±1 Z-score reference lines
 BOTTOM_GRID = True
 BOTTOM_GRID_COLOR = '#707070'
 BOTTOM_GRID_WIDTH = 1.0
@@ -361,7 +363,18 @@ def draw_chart(ratio_df: pd.DataFrame):
                 ax_bot.axhline(ZSCORE_UNDER, color=THRESHOLD_COLOR_LOW, linewidth=ZSCORE_THRESHOLD_WIDTH, linestyle='--', alpha=0.9,
                                label=f'Low ({ZSCORE_UNDER}σ)')
 
-                # Additional horizontal lines for finer granularity (±1 mild, ±3 extreme)
+                # Mild ±1 reference lines: use the exact same color/width/alpha/style as the bottom grid
+                # (no separate config entries for these two lines)
+                for level in (1.0, -1.0):
+                    ax_bot.axhline(
+                        level,
+                        color=BOTTOM_GRID_COLOR,
+                        linewidth=BOTTOM_GRID_WIDTH,
+                        linestyle=BOTTOM_GRID_STYLE,
+                        alpha=BOTTOM_GRID_ALPHA
+                    )
+
+                # Additional horizontal lines for extreme deviations (±3)
                 # Drawn with lighter style (dotted) and no legend entries to avoid clutter
                 for level in ZSCORE_EXTRA_LEVELS:
                     if level == 0:
@@ -379,7 +392,7 @@ def draw_chart(ratio_df: pd.DataFrame):
                     )
 
                 # Light background shading for extreme zones (subtle) — still based on primary ±2
-                all_levels = [0.0, ZSCORE_OVER, ZSCORE_UNDER] + list(ZSCORE_EXTRA_LEVELS)
+                all_levels = [0.0, ZSCORE_OVER, ZSCORE_UNDER, 1.0, -1.0] + list(ZSCORE_EXTRA_LEVELS)
                 ylim_top = max(zseries.max() + 0.3, max(all_levels) + 0.8)
                 ylim_bot = min(zseries.min() - 0.3, min(all_levels) - 0.8)
                 ax_bot.axhspan(ZSCORE_OVER, ylim_top, alpha=0.06, color='red')
@@ -461,7 +474,7 @@ def draw_chart(ratio_df: pd.DataFrame):
         # Subtle bottom panel title / interpretation
         if BOTTOM_INDICATOR == "zscore":
             ax_bot.set_title(
-                "Z-Score of Ratio: Positive = ratio unusually HIGH vs its recent average  |  Negative = unusually LOW  |  |Z| > 2 often signals extended move  |  extra lines at ±1 / ±3",
+                "Z-Score of Ratio: Positive = ratio unusually HIGH vs its recent average  |  Negative = unusually LOW  |  |Z| > 2 often signals extended move  |  mild ±1 (grid style) / extreme ±3",
                 fontsize=8, pad=4, style='italic', color='#34495E'
             )
         elif BOTTOM_INDICATOR == "rsi":
