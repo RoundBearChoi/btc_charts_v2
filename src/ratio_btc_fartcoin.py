@@ -80,11 +80,11 @@ THRESHOLD_COLOR_LOW = '#27AE60'
 
 # Line thicknesses, color & alpha (Z-score panel)
 ZSCORE_LINE_WIDTH = 1.2
-ZSCORE_MEAN_WIDTH = 1.2
-ZSCORE_MEAN_ALPHA = 0.65
+ZSCORE_MEAN_WIDTH = 1.1
+ZSCORE_MEAN_ALPHA = 1.0
 ZSCORE_THRESHOLD_WIDTH = 1.2
 ZSCORE_EXTRA_WIDTH = 1.2
-ZSCORE_MEAN_COLOR = '#6B6B6A'
+ZSCORE_MEAN_COLOR = '#707070'
 
 # Colors for extra horizontal lines (±3)
 ZSCORE_EXTRA_COLOR_HIGH = '#E74C3C'   # Positive extra levels
@@ -93,17 +93,17 @@ ZSCORE_EXTRA_COLOR_LOW = '#27AE60'    # Negative extra levels
 # Bottom panel grid (the faint lines at automatic tick positions, e.g. -0.71 etc.)
 # Also used for the mild ±1 Z-score reference lines
 BOTTOM_GRID = True
-BOTTOM_GRID_COLOR = '#707070'
-BOTTOM_GRID_WIDTH = 1.2
+BOTTOM_GRID_COLOR = '#B0AFAB'
+BOTTOM_GRID_WIDTH = 1.0
 BOTTOM_GRID_ALPHA = 0.7
-BOTTOM_GRID_STYLE = ':'              # ':', '--', '-.', '-'
+BOTTOM_GRID_STYLE = '--'              # ':', '--', '-.', '-'
 
 # Top panel grid
 TOP_GRID = True
-TOP_GRID_COLOR = '#707070'
+TOP_GRID_COLOR = '#B0AFAB'
 TOP_GRID_WIDTH = 1.0
-TOP_GRID_ALPHA = 0.8
-TOP_GRID_STYLE = '--'                # ':', '--', '-.', '-'
+TOP_GRID_ALPHA = 0.7
+TOP_GRID_STYLE = '--'
 # =============================================================================
 # END OF CONFIGURATION
 # =============================================================================
