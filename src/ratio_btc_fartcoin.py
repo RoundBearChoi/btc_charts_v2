@@ -78,9 +78,10 @@ BOTTOM_LINE_COLOR_RSI = '#8E44AD' # Purple for RSI
 THRESHOLD_COLOR_HIGH = '#E74C3C'
 THRESHOLD_COLOR_LOW = '#27AE60'
 
-# Line thicknesses & mean color (Z-score panel)
+# Line thicknesses, color & alpha (Z-score panel)
 ZSCORE_LINE_WIDTH = 1.2
 ZSCORE_MEAN_WIDTH = 1.2
+ZSCORE_MEAN_ALPHA = 0.65
 ZSCORE_THRESHOLD_WIDTH = 1.2
 ZSCORE_EXTRA_WIDTH = 1.2
 ZSCORE_MEAN_COLOR = '#6B6B6A'
@@ -357,7 +358,7 @@ def draw_chart(ratio_df: pd.DataFrame):
                 )
 
                 # Reference lines for statistical extremes (primary thresholds)
-                ax_bot.axhline(0, color=ZSCORE_MEAN_COLOR, linewidth=ZSCORE_MEAN_WIDTH, linestyle='-', alpha=0.65, label='Mean (0)')
+                ax_bot.axhline(0, color=ZSCORE_MEAN_COLOR, linewidth=ZSCORE_MEAN_WIDTH, linestyle='-', alpha=ZSCORE_MEAN_ALPHA, label='Mean (0)')
                 ax_bot.axhline(ZSCORE_OVER, color=THRESHOLD_COLOR_HIGH, linewidth=ZSCORE_THRESHOLD_WIDTH, linestyle='--', alpha=0.9,
                                label=f'High (+{ZSCORE_OVER}σ)')
                 ax_bot.axhline(ZSCORE_UNDER, color=THRESHOLD_COLOR_LOW, linewidth=ZSCORE_THRESHOLD_WIDTH, linestyle='--', alpha=0.9,
