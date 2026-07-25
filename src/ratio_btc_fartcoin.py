@@ -78,11 +78,11 @@ THRESHOLD_COLOR_HIGH = '#E74C3C'
 THRESHOLD_COLOR_LOW = '#27AE60'
 
 # Line thicknesses & mean color (Z-score panel)
-ZSCORE_LINE_WIDTH = 1.6
-ZSCORE_MEAN_WIDTH = 1.25
-ZSCORE_THRESHOLD_WIDTH = 1.15     # Primary ±2 thresholds
-ZSCORE_EXTRA_WIDTH = 1.5         # Extra levels (±1, ±3)
-ZSCORE_MEAN_COLOR = '#5D6D7E'     # Color for the mean (0) line
+ZSCORE_LINE_WIDTH = 1.2
+ZSCORE_MEAN_WIDTH = 2.0
+ZSCORE_THRESHOLD_WIDTH = 1.2
+ZSCORE_EXTRA_WIDTH = 1.2
+ZSCORE_MEAN_COLOR = '#9F99A1'
 
 # Colors for extra horizontal lines (±1, ±3)
 ZSCORE_EXTRA_COLOR_HIGH = '#E74C3C'   # Positive extra levels
