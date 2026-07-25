@@ -88,6 +88,13 @@ ZSCORE_MEAN_COLOR = '#5D6D7E'     # Color for the mean (0) line
 # Colors for extra horizontal lines (±1, ±3)
 ZSCORE_EXTRA_COLOR_HIGH = '#E74C3C'   # Positive extra levels
 ZSCORE_EXTRA_COLOR_LOW = '#27AE60'    # Negative extra levels
+
+# Bottom panel grid (the faint lines at automatic tick positions, e.g. -0.71 etc.)
+BOTTOM_GRID = True
+BOTTOM_GRID_COLOR = '#888888'
+BOTTOM_GRID_WIDTH = 0.7
+BOTTOM_GRID_ALPHA = 0.25
+BOTTOM_GRID_STYLE = ':'              # ':', '--', '-.', '-'
 # =============================================================================
 # END OF CONFIGURATION
 # =============================================================================
@@ -420,8 +427,14 @@ def draw_chart(ratio_df: pd.DataFrame):
                 ax_bot.legend(loc='upper left', fontsize=7.5, framealpha=0.88)
 
         # Common bottom panel setup
-        if SHOW_GRID:
-            ax_bot.grid(True, alpha=0.18, linestyle=':')
+        if BOTTOM_GRID:
+            ax_bot.grid(
+                True,
+                color=BOTTOM_GRID_COLOR,
+                linewidth=BOTTOM_GRID_WIDTH,
+                alpha=BOTTOM_GRID_ALPHA,
+                linestyle=BOTTOM_GRID_STYLE
+            )
 
         ax_bot.set_xlabel('Date', fontsize=10)
 
