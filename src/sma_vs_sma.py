@@ -20,6 +20,7 @@ SHOW_GRID = True
 
 # Colors (consistent with 21_50_200_chart where possible)
 CLOSE_COLOR = '#9EB3DB'
+CLOSE_WIDTH = 0.6            # Line width for closing price
 SMA111_COLOR = '#E15FC3'     # Pink/magenta for 111
 SMA50_COLOR = '#00D118'      # Green for 50
 VOLUME_COLOR = '#8F8C57'
@@ -87,7 +88,7 @@ def draw(block_window=BLOCK_WINDOW, rsi_window=RSI_WINDOW, volume_sma_days=VOLUM
 
     # === AX1: Price + SMAs ===
     ax1.plot(data_frame.index, data_frame['close'], label=f'{coin_name} Close Price',
-             linewidth=0.6, color=CLOSE_COLOR)
+             linewidth=CLOSE_WIDTH, color=CLOSE_COLOR)
     ax1.plot(data_frame.index, data_frame['SMA111'], label='111-Day SMA',
              linewidth=0.95, color=SMA111_COLOR)
     ax1.plot(data_frame.index, data_frame['SMA50'], label='50-Day SMA',
