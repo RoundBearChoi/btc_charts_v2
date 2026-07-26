@@ -20,7 +20,7 @@ SHOW_GRID = True
 
 # Colors (consistent with 21_50_200_chart where possible)
 CLOSE_COLOR = '#9EB3DB'
-CLOSE_WIDTH = 0.6            # Line width for closing price
+CLOSE_WIDTH = 1.1
 SMA111_COLOR = '#E15FC3'     # Pink/magenta for 111
 SMA50_COLOR = '#00D118'      # Green for 50
 VOLUME_COLOR = '#8F8C57'
