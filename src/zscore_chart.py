@@ -20,6 +20,12 @@ FIGURE_SIZE = (14, 8)
 ZSCORE_WINDOW = 365            # Rolling window in days (365 = ~1 year)
 ZSCORE_COLOR = '#d62728'
 
+# Z-Score panel grid styling (bottom chart)
+# These only affect the Z-Score axis when SHOW_GRID is True
+ZSCORE_GRID_COLOR = '#b0b0b0'  # grid line color
+ZSCORE_GRID_LINEWIDTH = 0.7    # grid line thickness
+ZSCORE_GRID_ALPHA = 0.35       # grid line opacity (0.0 - 1.0)
+
 # Price chart styling
 CLOSE_COLOR = '#1f77b4'
 CLOSE_WIDTH = 1.2
@@ -143,7 +149,12 @@ def draw(block_window=BLOCK_WINDOW, log_scale=LOG_SCALE, days_back=DAYS_BACK, zs
     ax2.set_ylabel("Z-Score")
     ax2.legend(loc="upper left", fontsize=9)
     if SHOW_GRID:
-        ax2.grid(True, alpha=0.3)
+        ax2.grid(
+            True,
+            color=ZSCORE_GRID_COLOR,
+            linewidth=ZSCORE_GRID_LINEWIDTH,
+            alpha=ZSCORE_GRID_ALPHA,
+        )
 
     # Nice date formatting on shared x-axis
     ax2.xaxis.set_major_locator(mdates.YearLocator())
