@@ -27,10 +27,11 @@ ZSCORE_GRID_LINEWIDTH = 0.7    # grid line thickness
 ZSCORE_GRID_ALPHA = 0.35       # grid line opacity (0.0 - 1.0)
 
 # Date axis labeling (shared x-axis)
-# "month" = label every month (recommended for shorter views / DAYS_BACK)
-# "year"  = label every year (cleaner for full history)
-DATE_TICK_INTERVAL = "month"   # "month" | "year"
-DATE_LABEL_ROTATION = 45       # degrees – 45 works better with monthly labels
+# "month"   = every month
+# "2month"  = every 2 months (good default balance)
+# "year"    = every year (cleanest for full history)
+DATE_TICK_INTERVAL = "2month"  # "month" | "2month" | "year"
+DATE_LABEL_ROTATION = 45       # degrees
 DATE_LABEL_FORMAT = "%Y-%m"    # e.g. "%Y-%m", "%b %Y", "%Y"
 
 # Price chart styling
@@ -165,8 +166,11 @@ def draw(block_window=BLOCK_WINDOW, log_scale=LOG_SCALE, days_back=DAYS_BACK, zs
 
     # Date axis formatting (shared x-axis)
     if DATE_TICK_INTERVAL == "month":
-        ax2.xaxis.set_major_locator(mdates.MonthLocator())
-        ax2.xaxis.set_minor_locator(mdates.WeekdayLocator(byweekday=mdates.MO))
+        ax2.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
+        ax2.xaxis.set_minor_locator(mdates.MonthLocator())
+    elif DATE_TICK_INTERVAL == "2month":
+        ax2.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+        ax2.xaxis.set_minor_locator(mdates.MonthLocator())
     else:  # "year"
         ax2.xaxis.set_major_locator(mdates.YearLocator())
         ax2.xaxis.set_minor_locator(mdates.MonthLocator())
