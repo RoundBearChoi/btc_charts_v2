@@ -14,8 +14,8 @@ SHOW_GRID = True
 
 # Grid line styling (applies identically to all 3 charts)
 GRID_COLOR = 'gray'          # e.g. 'gray', '#666666', 'black', '#444444'
-GRID_LINEWIDTH = 0.8         # thickness of grid lines
-GRID_ALPHA = 0.3             # transparency (0.0 fully transparent → 1.0 solid)
+GRID_LINEWIDTH = 1.0
+GRID_ALPHA = 0.6
 
 FIGURE_SIZE = (14, 10)
 
