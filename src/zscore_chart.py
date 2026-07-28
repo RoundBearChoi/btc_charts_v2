@@ -20,9 +20,14 @@ FIGURE_SIZE = (14, 8)
 ZSCORE_WINDOW = 365            # Rolling window in days (365 = ~1 year)
 ZSCORE_COLOR = '#d62728'
 
-# Z-Score panel grid styling (bottom chart)
-# These only affect the Z-Score axis when SHOW_GRID is True
-ZSCORE_GRID_COLOR = '#b0b0b0'  # grid line color
+# Grid styling (both panels, when SHOW_GRID is True)
+# Top panel (Price)
+PRICE_GRID_COLOR = '#b0b0b0'
+PRICE_GRID_LINEWIDTH = 1.0
+PRICE_GRID_ALPHA = 0.6
+
+# Bottom panel (Z-Score)
+ZSCORE_GRID_COLOR = '#b0b0b0'
 ZSCORE_GRID_LINEWIDTH = 1.0
 ZSCORE_GRID_ALPHA = 0.6
 
@@ -135,7 +140,12 @@ def draw(block_window=BLOCK_WINDOW, log_scale=LOG_SCALE, days_back=DAYS_BACK, zs
     ax1.set_ylabel("Price (USD)")
     ax1.legend(loc="upper left")
     if SHOW_GRID:
-        ax1.grid(True, alpha=0.3)
+        ax1.grid(
+            True,
+            color=PRICE_GRID_COLOR,
+            linewidth=PRICE_GRID_LINEWIDTH,
+            alpha=PRICE_GRID_ALPHA,
+        )
     ax1.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, p: f"${int(x):,}"))
 
     # --- Bottom panel: Z-Score ---
