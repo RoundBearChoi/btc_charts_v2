@@ -27,4 +27,4 @@ python src/rsi_vs_halving.py
 | `indicators.py`                     | Shared indicators (RSI, SMA, Z-Score…)   |
 | `get_price_data_cryptocompare.py`   | Data downloader + cache                  |
 
-Data cached in `src/cryptocompare_data/`.
+Data cached in `src/cryptocompare_data/`
