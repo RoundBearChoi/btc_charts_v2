@@ -15,8 +15,8 @@ SHOW_GRID = True
 # Grid line styling (applies identically to all 3 charts)
 GRID_COLOR = 'gray'          # e.g. 'gray', '#666666', 'black', '#444444'
 GRID_LINEWIDTH = 1.0
-GRID_ALPHA = 0.6
-GRID_LINESTYLE = '-'         # e.g. '-', '--', '-.', ':', 'None'
+GRID_ALPHA = 0.7
+GRID_LINESTYLE = ':'         # e.g. '-', '--', '-.', ':', 'None'
 
 FIGURE_SIZE = (14, 10)
 
