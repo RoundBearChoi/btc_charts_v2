@@ -26,6 +26,13 @@ ZSCORE_GRID_COLOR = '#b0b0b0'  # grid line color
 ZSCORE_GRID_LINEWIDTH = 0.7    # grid line thickness
 ZSCORE_GRID_ALPHA = 0.35       # grid line opacity (0.0 - 1.0)
 
+# Date axis labeling (shared x-axis)
+# "month" = label every month (recommended for shorter views / DAYS_BACK)
+# "year"  = label every year (cleaner for full history)
+DATE_TICK_INTERVAL = "month"   # "month" | "year"
+DATE_LABEL_ROTATION = 45       # degrees – 45 works better with monthly labels
+DATE_LABEL_FORMAT = "%Y-%m"    # e.g. "%Y-%m", "%b %Y", "%Y"
+
 # Price chart styling
 CLOSE_COLOR = '#1f77b4'
 CLOSE_WIDTH = 1.2
@@ -156,11 +163,16 @@ def draw(block_window=BLOCK_WINDOW, log_scale=LOG_SCALE, days_back=DAYS_BACK, zs
             alpha=ZSCORE_GRID_ALPHA,
         )
 
-    # Nice date formatting on shared x-axis
-    ax2.xaxis.set_major_locator(mdates.YearLocator())
-    ax2.xaxis.set_minor_locator(mdates.MonthLocator())
-    ax2.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
-    plt.xticks(rotation=0)
+    # Date axis formatting (shared x-axis)
+    if DATE_TICK_INTERVAL == "month":
+        ax2.xaxis.set_major_locator(mdates.MonthLocator())
+        ax2.xaxis.set_minor_locator(mdates.WeekdayLocator(byweekday=mdates.MO))
+    else:  # "year"
+        ax2.xaxis.set_major_locator(mdates.YearLocator())
+        ax2.xaxis.set_minor_locator(mdates.MonthLocator())
+
+    ax2.xaxis.set_major_formatter(mdates.DateFormatter(DATE_LABEL_FORMAT))
+    plt.xticks(rotation=DATE_LABEL_ROTATION)
     plt.xlabel("Date")
 
     plt.tight_layout()
