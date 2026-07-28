@@ -23,8 +23,8 @@ ZSCORE_COLOR = '#d62728'
 # Z-Score panel grid styling (bottom chart)
 # These only affect the Z-Score axis when SHOW_GRID is True
 ZSCORE_GRID_COLOR = '#b0b0b0'  # grid line color
-ZSCORE_GRID_LINEWIDTH = 0.7    # grid line thickness
-ZSCORE_GRID_ALPHA = 0.35       # grid line opacity (0.0 - 1.0)
+ZSCORE_GRID_LINEWIDTH = 1.0
+ZSCORE_GRID_ALPHA = 0.6
 
 # Date axis labeling (shared x-axis)
 # "month"   = every month
