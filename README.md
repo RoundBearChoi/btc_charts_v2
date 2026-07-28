@@ -1,30 +1,114 @@
 # btc_charts_v2
 
-Lightweight Python tools for Bitcoin & crypto charting using CryptoCompare data.
+Lightweight, highly configurable Python toolkit for Bitcoin & crypto technical analysis charts.
+
+Built around **CryptoCompare** historical price data (with smart incremental caching), plus Binance / Hyperliquid funding rates. Most charts support multi-coin selection (BTC, FARTCOIN, TROLL, or any custom ticker) and have a clear `CONFIG` section at the top for easy customization of windows, colors, date ranges, grid styling, etc.
+
+**Requires Python ≥ 3.10**
+
+---
 
 ## Quick Start
 
 ```bash
 pip install -r requirements.txt
 
-# Download / update data
+# First-time / update price data (smart incremental — only downloads missing days)
 python src/get_price_data_cryptocompare.py
 
-# Example charts
-python src/price_zscore_chart.py
+# Popular charts
+python src/zscore_chart.py
 python src/21_50_200_chart.py
-python src/rsi_vs_halving.py
+python src/ratio_btc_fartcoin.py
+python src/funding_rates_btc_binance.py
 ```
 
-## Scripts
+Optional free CryptoCompare API key (higher rate limits):
+```bash
+export CRYPTOCOMPARE_API_KEY="your_key_here"
+```
 
-| Script                              | Description                              |
-|-------------------------------------|------------------------------------------|
-| `price_zscore_chart.py`             | Price chart + rolling Z-Score            |
-| `21_50_200_chart.py`                | Price + Volume + RSI (custom window)     |
-| `rsi_vs_halving.py`                 | Monthly RSI colored by halving cycle     |
-| `pi_bottom_top.py`                  | Pi Cycle Top & Bottom                    |
-| `indicators.py`                     | Shared indicators (RSI, SMA, Z-Score…)   |
-| `get_price_data_cryptocompare.py`   | Data downloader + cache                  |
+Data is cached under `src/cryptocompare_data/` (one CSV per coin).
 
-Data cached in `src/cryptocompare_data/`
+---
+
+## Project Structure
+
+```
+src/
+├── get_price_data_cryptocompare.py   # Smart data downloader + cache (any coin)
+├── indicators.py                     # Shared indicators (RSI, SMA, EMA, Z-Score, Pi Cycle)
+├── plotting_utils.py                 # Common figure helpers & date formatters
+│
+├── zscore_chart.py                   # Price + Rolling Z-Score
+├── 21_50_200_chart.py                # EMA21 / SMA50 / SMA200 + Volume + RSI
+├── sma_vs_sma.py                     # 111 SMA vs 50 SMA + Volume + RSI
+├── ratio_btc_fartcoin.py             # BTC/FARTCOIN ratio + MAs + Z-Score/RSI extremes
+├── pi_bottom_top.py                  # Pi Cycle Bottom & Top indicators
+├── rsi_vs_halving.py                 # Monthly RSI colored by time-to-next-halving
+├── interactive_classic_200_week_sma.py  # Interactive weekly SMA slider
+├── usd_m2_vs_btc.py                  # BTC vs US M2 money supply (FRED)
+│
+├── funding_rates_btc_binance.py      # BTC Price + Funding Rate + Z-Score (Binance)
+└── funding_rates_fartcoin_hype.py    # FARTCOIN Price + Funding Rate + Z-Score (Hyperliquid)
+```
+
+---
+
+## Scripts Overview
+
+### Data & Shared Modules
+
+| Script | Description |
+|--------|-------------|
+| `get_price_data_cryptocompare.py` | Robust direct-API downloader. Supports **any ticker**. Smart incremental updates (only fetches missing recent days). Cleans zero-price pre-trading artifacts. Cache lives in `src/cryptocompare_data/`. |
+| `indicators.py` | Centralized, reusable indicators: Wilder RSI, SMA, EMA, rolling Z-Score, Pi Cycle Top/Bottom. |
+| `plotting_utils.py` | Shared helpers for consistent 3-panel layouts and date axis formatting. |
+
+### Price / Technical Charts
+
+| Script | Description |
+|--------|-------------|
+| `zscore_chart.py` | Two-panel: Price (with optional 200 SMA) + Rolling Z-Score. Configurable window (default 365d). Multi-coin selector. Excellent for spotting statistical extremes. |
+| `21_50_200_chart.py` | Classic three-panel: Price + EMA21/SMA50/SMA200 + Volume bars + RSI. Fully configurable RSI window, grid styling, date range. Multi-coin. |
+| `sma_vs_sma.py` | 111-day vs 50-day SMA + Volume + RSI. Same multi-coin + config pattern. |
+| `ratio_btc_fartcoin.py` | BTC/FARTCOIN price ratio with configurable MAs (or EMAs) on top + Z-Score (or RSI) extremes panel on bottom. **Offline** — uses existing CSVs only. Highly configurable thresholds and styling. |
+| `pi_bottom_top.py` | Dual-panel Pi Cycle indicators (Bottom: 471 SMA × factor + 150 EMA; Top: 350 SMA × 2 + 111 SMA). |
+| `rsi_vs_halving.py` | Monthly RSI line colored by months remaining until next Bitcoin halving. Includes cycle progress markers, halving vertical lines, and horizontal RSI levels. |
+| `interactive_classic_200_week_sma.py` | Interactive slider (3–250 weeks) for the classic weekly SMA. Uses Sunday weekly closes for accuracy. |
+| `usd_m2_vs_btc.py` | Two-panel comparison of monthly BTC close vs US M2 money supply (pulled live from FRED). |
+
+### Funding Rate Charts
+
+| Script | Description |
+|--------|-------------|
+| `funding_rates_btc_binance.py` | Three-panel: BTC Price (50/111 SMA) + Daily Funding Rate + Funding Z-Score. Data from Binance Futures. Local cache. |
+| `funding_rates_fartcoin_hype.py` | Same layout for FARTCOIN on Hyperliquid. |
+
+---
+
+## Common Patterns
+
+Almost every chart script follows the same structure:
+
+1. **CONFIG block** at the very top (DAYS_BACK, windows, colors, grid style, figure size, etc.)
+2. Optional interactive coin selector (`1) BTC  2) FARTCOIN  3) TROLL  4) type any ticker`)
+3. `draw()` function that loads data → adds indicators → plots → `plt.show()`
+4. Shared `indicators.py` and `plotting_utils.py` to avoid duplication
+
+This makes it very easy to tweak look-and-feel or analysis parameters without touching the plotting logic.
+
+---
+
+## Notes
+
+- **Multi-coin support**: Most price charts now accept any CryptoCompare ticker (PEPE, DOGE, SOL, etc.).
+- **Funding data** is cached separately (`binance_funding_data/`, `hyperliquid_fartcoin_funding_data/`).
+- The `cryptocompare` package is **no longer used** — the downloader talks to the v2 API directly via `requests`.
+- All scripts are designed to be run from the repo root: `python src/<script>.py`
+
+---
+
+## License
+
+MIT
