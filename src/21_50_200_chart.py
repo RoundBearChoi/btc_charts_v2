@@ -16,6 +16,7 @@ SHOW_GRID = True
 GRID_COLOR = 'gray'          # e.g. 'gray', '#666666', 'black', '#444444'
 GRID_LINEWIDTH = 1.0
 GRID_ALPHA = 0.6
+GRID_LINESTYLE = '-'         # e.g. '-', '--', '-.', ':', 'None'
 
 FIGURE_SIZE = (14, 10)
 
@@ -127,7 +128,7 @@ def draw(block_window=BLOCK_WINDOW, log_scale=LOG_SCALE, days_back=DAYS_BACK, rs
     ax1.set_ylabel('Price (USD)')
     ax1.legend(loc='upper left')
     if SHOW_GRID:
-        ax1.grid(True, color=GRID_COLOR, linewidth=GRID_LINEWIDTH, alpha=GRID_ALPHA)
+        ax1.grid(True, color=GRID_COLOR, linewidth=GRID_LINEWIDTH, alpha=GRID_ALPHA, linestyle=GRID_LINESTYLE)
     ax1.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, p: f'${int(x):,}'))
 
     # Volume
@@ -138,7 +139,7 @@ def draw(block_window=BLOCK_WINDOW, log_scale=LOG_SCALE, days_back=DAYS_BACK, rs
     ax2.set_ylabel('Volume (USD)')
     ax2.legend(loc='upper left')
     if SHOW_GRID:
-        ax2.grid(True, color=GRID_COLOR, linewidth=GRID_LINEWIDTH, alpha=GRID_ALPHA)
+        ax2.grid(True, color=GRID_COLOR, linewidth=GRID_LINEWIDTH, alpha=GRID_ALPHA, linestyle=GRID_LINESTYLE)
     ax2.yaxis.set_major_formatter(ticker.FuncFormatter(
         lambda x, pos: f'${x/1e9:.1f}B' if x >= 1e9 else f'${x/1e6:.0f}M' if x >= 1e6 else f'${x:,.0f}'))
 
@@ -152,7 +153,7 @@ def draw(block_window=BLOCK_WINDOW, log_scale=LOG_SCALE, days_back=DAYS_BACK, rs
     ax3.set_ylim(0, 100)
     ax3.legend(loc='upper left')
     if SHOW_GRID:
-        ax3.grid(True, color=GRID_COLOR, linewidth=GRID_LINEWIDTH, alpha=GRID_ALPHA)
+        ax3.grid(True, color=GRID_COLOR, linewidth=GRID_LINEWIDTH, alpha=GRID_ALPHA, linestyle=GRID_LINESTYLE)
 
     # ==================================================
     # X-AXIS DATE FORMATTING
