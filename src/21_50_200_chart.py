@@ -1,6 +1,4 @@
 import matplotlib
-matplotlib.use('TkAgg')  # Force interactive backend so the chart window actually pops up
-
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.ticker as ticker
