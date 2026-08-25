@@ -185,7 +185,9 @@ def draw(block_window=BLOCK_WINDOW, log_scale=LOG_SCALE, days_back=DAYS_BACK, rs
     # Smart display: interactive when possible, otherwise save PNG
     # --------------------------------------------------
     backend = matplotlib.get_backend().lower()
-    is_interactive = 'agg' not in backend
+    # Note: 'TkAgg' contains the substring 'agg', so we must NOT use 'agg' in backend
+    non_interactive = {'agg', 'svg', 'pdf', 'ps', 'cairo', 'template'}
+    is_interactive = backend not in non_interactive
 
     if not is_interactive:
         # Headless / no usable display → save to file
