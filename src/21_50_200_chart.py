@@ -173,7 +173,23 @@ def draw(block_window=BLOCK_WINDOW, log_scale=LOG_SCALE, days_back=DAYS_BACK, rs
     plt.tight_layout()
 
     print(f"Drawing {coin_name} chart with RSI({rsi_window})...")
-    plt.show(block=block_window)
+
+    # --------------------------------------------------
+    # Smart display: interactive when possible, otherwise save PNG
+    # --------------------------------------------------
+    backend = matplotlib.get_backend().lower()
+    is_interactive = matplotlib.is_interactive() and 'agg' not in backend
+
+    if not is_interactive:
+        # Headless / SSH / no display → save to file
+        safe_name = coin_ticker.lower().replace(" ", "_")
+        output_file = f"{safe_name}_21_50_200_rsi{rsi_window}.png"
+        plt.savefig(output_file, dpi=150, bbox_inches='tight', facecolor='white')
+        print(f"✅ Chart saved to: {output_file}")
+        plt.close(fig)
+    else:
+        # Interactive environment → show the window normally
+        plt.show(block=block_window)
 
 
 if __name__ == '__main__':
