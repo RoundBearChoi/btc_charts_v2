@@ -17,7 +17,30 @@ import indicators
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "cryptocompare_data")
 BTC_CSV = os.path.join(DATA_DIR, "cryptocompare_historic_btc_price.csv")
-FART_CSV = os.path.join(DATA_DIR, "cryptocompare_historic_fartcoin_price.csv")
+
+# Pair choices (prompted at runtime). Quote CSVs must already exist locally.
+# Monero follows get_price_data_cryptocompare._get_cache_file_path(): ticker XMR.
+PAIR_CHOICES = {
+    "1": {
+        "label": "BTC:FARTCOIN",
+        "quote_name": "FARTCOIN",
+        "csv_candidates": [
+            os.path.join(DATA_DIR, "cryptocompare_historic_fartcoin_price.csv"),
+        ],
+    },
+    "2": {
+        "label": "BTC:MONERO",
+        "quote_name": "MONERO",
+        "csv_candidates": [
+            os.path.join(DATA_DIR, "cryptocompare_historic_xmr_price.csv"),
+            os.path.join(DATA_DIR, "cryptocompare_historic_monero_price.csv"),
+        ],
+    },
+}
+
+# Set by prompt_user_for_pair() before any data is loaded
+QUOTE_NAME = "FARTCOIN"
+QUOTE_CSV = PAIR_CHOICES["1"]["csv_candidates"][0]
 
 # Chart behavior
 BLOCK_WINDOW = True          # True = script waits for you to close plot window
@@ -30,7 +53,7 @@ USE_EMA_INSTEAD = False      # If True, uses EMA instead of SMA for all windows 
 EMA_SPAN_FACTOR = 1.0        # For EMA, effective span = window * factor (1.0 = standard)
 
 # Ratio calculation
-RATIO_INVERTED = False       # False = BTC/FARTCOIN (how many FART per 1 BTC). True = FART/BTC
+RATIO_INVERTED = False       # False = BTC/QUOTE. True = QUOTE/BTC
 RATIO_NAME = "BTC / FARTCOIN" if not RATIO_INVERTED else "FARTCOIN / BTC"
 
 # Styling (consistent with other charts in the repo)
@@ -109,48 +132,114 @@ TOP_GRID_STYLE = '--'
 # =============================================================================
 
 
+def _resolve_existing_csv(candidates):
+    """Return the first candidate path that already exists on disk."""
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+    return None
+
+
+def apply_pair_labels(quote_name: str):
+    """Refresh pair-dependent labels after the user chooses a ratio."""
+    global QUOTE_NAME, RATIO_NAME, TITLE_PREFIX, Y_LABEL
+    QUOTE_NAME = quote_name
+    if RATIO_INVERTED:
+        RATIO_NAME = f"{quote_name} / BTC"
+        TITLE_PREFIX = f"{quote_name} : BTC Ratio"
+    else:
+        RATIO_NAME = f"BTC / {quote_name}"
+        TITLE_PREFIX = f"BTC : {quote_name} Ratio"
+    Y_LABEL = f"Price Ratio ({RATIO_NAME})"
+
+
+def prompt_user_for_pair():
+    """Ask which offline ratio to plot. Does not download anything."""
+    global QUOTE_CSV
+
+    print()
+    print("Select ratio pair (existing local CSVs only — no download):")
+    print("  1) BTC:FARTCOIN")
+    print("  2) BTC:MONERO")
+
+    aliases = {
+        "1": "1",
+        "2": "2",
+        "btc:fartcoin": "1",
+        "fartcoin": "1",
+        "fart": "1",
+        "btc:monero": "2",
+        "monero": "2",
+        "xmr": "2",
+    }
+
+    while True:
+        raw = input("Choice [1/2]: ").strip().lower()
+        key = aliases.get(raw)
+        if key is None:
+            print("  Please enter 1 or 2.")
+            continue
+
+        pair = PAIR_CHOICES[key]
+        quote_csv = _resolve_existing_csv(pair["csv_candidates"])
+        if quote_csv is None:
+            tried = "\n".join(f"    - {p}" for p in pair["csv_candidates"])
+            raise FileNotFoundError(
+                f"{pair['quote_name']} data file not found.\n"
+                "This script does not download data. Expected one of:\n"
+                f"{tried}\n"
+                f"Run `python src/get_price_data_cryptocompare.py` for that ticker first "
+                f"(Monero ticker is XMR)."
+            )
+
+        QUOTE_CSV = quote_csv
+        apply_pair_labels(pair["quote_name"])
+        print(f"\nSelected: {pair['label']}")
+        return pair
+
+
 def load_and_align_data():
     print(f"\nLoading existing data (NO downloads, only local CSVs)...")
-    print(f"  BTC cache   : {BTC_CSV}")
-    print(f"  FARTCOIN cache: {FART_CSV}")
+    print(f"  BTC cache      : {BTC_CSV}")
+    print(f"  {QUOTE_NAME} cache : {QUOTE_CSV}")
 
     if not os.path.exists(BTC_CSV):
         raise FileNotFoundError(
             f"BTC data file not found: {BTC_CSV}\n"
             "Run `python src/get_price_data_cryptocompare.py` (or with coin=BTC) first to create it."
         )
-    if not os.path.exists(FART_CSV):
+    if not os.path.exists(QUOTE_CSV):
         raise FileNotFoundError(
-            f"FARTCOIN data file not found: {FART_CSV}\n"
-            "Run the data downloader for FARTCOIN first (it supports custom tickers now)."
+            f"{QUOTE_NAME} data file not found: {QUOTE_CSV}\n"
+            "This script does not download data. Run the data downloader for that ticker first."
         )
 
     btc_df = pd.read_csv(BTC_CSV, index_col=0, parse_dates=True)
-    fart_df = pd.read_csv(FART_CSV, index_col=0, parse_dates=True)
+    quote_df = pd.read_csv(QUOTE_CSV, index_col=0, parse_dates=True)
 
-    print(f"  BTC rows loaded      : {len(btc_df):,}  ({btc_df.index.min().date()} → {btc_df.index.max().date()})")
-    print(f"  FARTCOIN rows loaded : {len(fart_df):,}  ({fart_df.index.min().date()} → {fart_df.index.max().date()})")
+    print(f"  BTC rows loaded        : {len(btc_df):,}  ({btc_df.index.min().date()} → {btc_df.index.max().date()})")
+    print(f"  {QUOTE_NAME} rows loaded : {len(quote_df):,}  ({quote_df.index.min().date()} → {quote_df.index.max().date()})")
 
     # Align on exact matching timestamps (inner join on datetime index)
-    common_index = btc_df.index.intersection(fart_df.index)
+    common_index = btc_df.index.intersection(quote_df.index)
     overlap_days = len(common_index)
 
     if overlap_days < 5:
         raise ValueError(
-            f"Only {overlap_days} overlapping trading days found between BTC and FARTCOIN.\n"
-            "FARTCOIN data is much shorter (memecoin). Ensure both CSVs cover a common recent period."
+            f"Only {overlap_days} overlapping trading days found between BTC and {QUOTE_NAME}.\n"
+            "Ensure both CSVs cover a common period."
         )
 
-    print(f"  Overlapping days     : {overlap_days:,}  ({common_index.min().date()} → {common_index.max().date()})")
+    print(f"  Overlapping days       : {overlap_days:,}  ({common_index.min().date()} → {common_index.max().date()})")
 
     btc_aligned = btc_df.loc[common_index]
-    fart_aligned = fart_df.loc[common_index]
+    quote_aligned = quote_df.loc[common_index]
 
     # Compute ratio (handle potential zero prices defensively, though CryptoCompare cleans most)
     if RATIO_INVERTED:
-        ratio_series = fart_aligned['close'] / btc_aligned['close']
+        ratio_series = quote_aligned['close'] / btc_aligned['close']
     else:
-        ratio_series = btc_aligned['close'] / fart_aligned['close']
+        ratio_series = btc_aligned['close'] / quote_aligned['close']
 
     # Create clean ratio DataFrame (we treat ratio as the 'price' for indicator reuse)
     ratio_df = pd.DataFrame({'close': ratio_series}, index=common_index)
@@ -160,20 +249,21 @@ def load_and_align_data():
     # Optional recent window filter (applied after alignment)
     if DAYS_BACK is not None and DAYS_BACK > 0:
         ratio_df = ratio_df.iloc[-min(DAYS_BACK, len(ratio_df)):]
-        print(f"  Filtered to last     : {DAYS_BACK} days → {len(ratio_df)} rows")
+        print(f"  Filtered to last       : {DAYS_BACK} days → {len(ratio_df)} rows")
 
     # Basic sanity on ratio values
     current_ratio = ratio_df['close'].iloc[-1]
     min_ratio = ratio_df['close'].min()
     max_ratio = ratio_df['close'].max()
-    print(f"  Current ratio        : {current_ratio:,.4f}")
-    print(f"  Ratio range in window: {min_ratio:,.4f} → {max_ratio:,.4f}")
+    print(f"  Current ratio          : {current_ratio:,.4f}")
+    print(f"  Ratio range in window  : {min_ratio:,.4f} → {max_ratio:,.4f}")
 
     return ratio_df
 
+
 def add_moving_averages(ratio_df: pd.DataFrame) -> pd.DataFrame:
     """Add SMA or EMA columns using the shared indicators module.
-    
+
     This reuses the exact same battle-tested rolling logic from indicators.py
     (Wilder-style where applicable, but SMA/EMA are simple rolling/ewm).
     """
@@ -202,9 +292,10 @@ def add_moving_averages(ratio_df: pd.DataFrame) -> pd.DataFrame:
 
     return ratio_df
 
+
 def add_extremes_indicator(ratio_df: pd.DataFrame) -> pd.DataFrame:
     """Add Z-score or RSI indicator for the bottom panel.
-    
+
     Reuses your existing battle-tested indicators.add_zscore() and add_rsi()
     from indicators.py. This keeps the implementation DRY and consistent
     with the rest of your btc_charts_v2 toolkit.
@@ -242,9 +333,10 @@ def add_extremes_indicator(ratio_df: pd.DataFrame) -> pd.DataFrame:
 
     return ratio_df
 
+
 def draw_chart(ratio_df: pd.DataFrame):
     """Render the ratio + MAs (top) and optional extremes indicator (bottom) with professional styling.
-    
+
     When bottom indicator is enabled, uses shared x-axis for easy date correlation between
     ratio level and its statistical/momentum state. This is the key UX improvement for
     spotting when the ratio has \"gone up too much or down\".
@@ -496,13 +588,14 @@ def draw_chart(ratio_df: pd.DataFrame):
 
 def main():
     print("=" * 72)
-    print("BTC / FARTCOIN RATIO CHART  (offline mode - existing data only)")
+    print("BTC RATIO CHART  (offline mode - existing data only)")
     print("This script strictly uses pre-existing cryptocompare_data/ CSVs.")
     if ADD_BOTTOM_INDICATOR and BOTTOM_INDICATOR:
         print(f"Bottom panel enabled: {BOTTOM_INDICATOR.upper()}  (Z-score recommended for ratio overextension detection)")
     print("=" * 72)
 
     try:
+        prompt_user_for_pair()
         ratio_df = load_and_align_data()
         ratio_df = add_moving_averages(ratio_df)
         ratio_df = add_extremes_indicator(ratio_df)
