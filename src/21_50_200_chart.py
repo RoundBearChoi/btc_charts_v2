@@ -53,21 +53,24 @@ def get_coin_choice() -> str:
     print("1) BTC")
     print("2) FARTCOIN")
     print("3) TROLL")
-    print("4) Any Other → type ticker (PEPE, DOGE, SOL, etc.)")
+    print("4) MONERO")
+    print("5) Any Other → type ticker (PEPE, DOGE, SOL, etc.)")
     print("="*60)
     while True:
-        choice = input("\nEnter 1-4 or type ticker: ").strip().upper()
+        choice = input("\nEnter 1-5 or type ticker: ").strip().upper()
         if choice in ["1", "BTC"]:
             return "BTC"
         elif choice in ["2", "FARTCOIN"]:
             return "FARTCOIN"
         elif choice in ["3", "TROLL"]:
             return "TROLL"
+        elif choice in ["4", "XMR", "MONERO"]:
+            return "XMR"
         elif choice and len(choice) >= 2:  # free-form ticker
             print(f"→ Using custom ticker → {choice}")
             return choice
         else:
-            print("✘ Invalid. Try 1, 2, 3 or type a ticker.")
+            print("✘ Invalid. Try 1, 2, 3, 4 or type a ticker.")
 
 def add_rsi(data_frame, window=14):
     delta = data_frame['close'].diff()
@@ -92,6 +95,7 @@ def draw(block_window=BLOCK_WINDOW, log_scale=LOG_SCALE, days_back=DAYS_BACK, rs
         "BTC": "Bitcoin",
         "FARTCOIN": "Fartcoin",
         "TROLL": "Troll",
+        "XMR": "Monero",
     }
     coin_name = coin_display_names.get(coin_ticker, coin_ticker)
     
