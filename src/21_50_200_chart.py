@@ -51,26 +51,29 @@ def get_coin_choice() -> str:
     print("21/50/200 + Volume + RSI Chart - Coin Selection")
     print("="*60)
     print("1) BTC")
-    print("2) FARTCOIN")
-    print("3) TROLL")
-    print("4) MONERO")
-    print("5) Any Other → type ticker (PEPE, DOGE, SOL, etc.)")
+    print("2) SOLANA")
+    print("3) MONERO")
+    print("4) FARTCOIN")
+    print("5) TROLL")
+    print("6) Any Other → type ticker (PEPE, DOGE, ETH, etc.)")
     print("="*60)
     while True:
-        choice = input("\nEnter 1-5 or type ticker: ").strip().upper()
+        choice = input("\nEnter 1-6 or type ticker: ").strip().upper()
         if choice in ["1", "BTC"]:
             return "BTC"
-        elif choice in ["2", "FARTCOIN"]:
-            return "FARTCOIN"
-        elif choice in ["3", "TROLL"]:
-            return "TROLL"
-        elif choice in ["4", "XMR", "MONERO"]:
+        elif choice in ["2", "SOL", "SOLANA"]:
+            return "SOL"
+        elif choice in ["3", "XMR", "MONERO"]:
             return "XMR"
+        elif choice in ["4", "FARTCOIN"]:
+            return "FARTCOIN"
+        elif choice in ["5", "TROLL"]:
+            return "TROLL"
         elif choice and len(choice) >= 2:  # free-form ticker
             print(f"→ Using custom ticker → {choice}")
             return choice
         else:
-            print("✘ Invalid. Try 1, 2, 3, 4 or type a ticker.")
+            print("✘ Invalid. Try 1-6 or type a ticker.")
 
 def add_rsi(data_frame, window=14):
     delta = data_frame['close'].diff()
@@ -93,9 +96,10 @@ def draw(block_window=BLOCK_WINDOW, log_scale=LOG_SCALE, days_back=DAYS_BACK, rs
     # Beautiful display names
     coin_display_names = {
         "BTC": "Bitcoin",
+        "SOL": "Solana",
+        "XMR": "Monero",
         "FARTCOIN": "Fartcoin",
         "TROLL": "Troll",
-        "XMR": "Monero",
     }
     coin_name = coin_display_names.get(coin_ticker, coin_ticker)
     
