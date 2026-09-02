@@ -11,6 +11,10 @@ Built around **CryptoCompare** historical price data (with smart incremental cac
 ## Quick Start
 
 ```bash
+# Needed for interactive chart windows (Matplotlib TkAgg).
+# Tkinter is an OS package — pip will not install it.
+sudo apt install python3-tk
+
 pip install -r requirements.txt
 
 # First-time / update BTC price data (smart incremental — only downloads missing days)
@@ -23,31 +27,26 @@ python src/ratio_between_coins.py
 python src/funding_rates_btc_binance.py
 ```
 
-### Tkinter (needed for interactive chart windows)
-
-Several scripts force Matplotlib's `TkAgg` backend so `plt.show()` opens a real window. Tkinter is **not** installed by `pip` — it ships with the OS / Python installer.
+Check that Tkinter imported:
 
 ```bash
-# Debian / Ubuntu / Mint
-sudo apt install python3-tk
+python -c "import tkinter; print('tkinter OK')"
+```
 
+Other systems:
+
+```bash
 # Fedora
 sudo dnf install python3-tkinter
 
 # Arch
 sudo pacman -S tk
 
-# macOS (Homebrew Python)
-brew install python-tk@3.12   # match your Python version, e.g. python-tk@3.11
+# macOS (Homebrew Python — match your version)
+brew install python-tk@3.12
 ```
 
-On Windows, use the official python.org installer and leave **tcl/tk and IDLE** checked. Microsoft Store / some embeddable builds omit it.
-
-Quick check:
-
-```bash
-python -c "import tkinter; print('tkinter OK')"
-```
+On Windows, use the official python.org installer and leave **tcl/tk and IDLE** checked.
 
 If Tkinter is missing, some scripts still run and save a PNG instead of opening a window.
 
@@ -134,7 +133,7 @@ On a machine with Tkinter + a GUI backend (typically TkAgg), charts open in an i
 
 ## Notes
 
-- **Tkinter** is required for interactive chart windows. Install the OS package (`python3-tk` / `python3-tkinter` / `tk`); it is not in `requirements.txt`.
+- **Tkinter** is required for interactive chart windows. On Debian/Ubuntu: `sudo apt install python3-tk`. It is not in `requirements.txt`.
 - **Multi-coin support**: Most price charts accept any CryptoCompare ticker (SOL, XMR, PEPE, DOGE, etc.).
 - **Ratio chart** is offline-only. Expected cache names include `cryptocompare_historic_btc_price.csv`, `cryptocompare_historic_fartcoin_price.csv`, `cryptocompare_historic_xmr_price.csv`, and `cryptocompare_historic_sol_price.csv`.
 - **Funding data** is cached separately (`binance_funding_data/`, `hyperliquid_fartcoin_funding_data/`).
