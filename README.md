@@ -23,6 +23,34 @@ python src/ratio_between_coins.py
 python src/funding_rates_btc_binance.py
 ```
 
+### Tkinter (needed for interactive chart windows)
+
+Several scripts force Matplotlib's `TkAgg` backend so `plt.show()` opens a real window. Tkinter is **not** installed by `pip` — it ships with the OS / Python installer.
+
+```bash
+# Debian / Ubuntu / Mint
+sudo apt install python3-tk
+
+# Fedora
+sudo dnf install python3-tkinter
+
+# Arch
+sudo pacman -S tk
+
+# macOS (Homebrew Python)
+brew install python-tk@3.12   # match your Python version, e.g. python-tk@3.11
+```
+
+On Windows, use the official python.org installer and leave **tcl/tk and IDLE** checked. Microsoft Store / some embeddable builds omit it.
+
+Quick check:
+
+```bash
+python -c "import tkinter; print('tkinter OK')"
+```
+
+If Tkinter is missing, some scripts still run and save a PNG instead of opening a window.
+
 Optional free CryptoCompare API key (higher rate limits):
 ```bash
 export CRYPTOCOMPARE_API_KEY="your_key_here"
@@ -100,12 +128,13 @@ Almost every chart script follows the same structure:
 
 This makes it very easy to tweak look-and-feel or analysis parameters without touching the plotting logic.
 
-On a machine with a GUI backend (typically TkAgg), charts open in an interactive window. On headless / SSH sessions some scripts save a PNG instead of calling `plt.show()`.
+On a machine with Tkinter + a GUI backend (typically TkAgg), charts open in an interactive window. On headless / SSH sessions, or if Tkinter is missing, some scripts save a PNG instead of calling `plt.show()`.
 
 ---
 
 ## Notes
 
+- **Tkinter** is required for interactive chart windows. Install the OS package (`python3-tk` / `python3-tkinter` / `tk`); it is not in `requirements.txt`.
 - **Multi-coin support**: Most price charts accept any CryptoCompare ticker (SOL, XMR, PEPE, DOGE, etc.).
 - **Ratio chart** is offline-only. Expected cache names include `cryptocompare_historic_btc_price.csv`, `cryptocompare_historic_fartcoin_price.csv`, `cryptocompare_historic_xmr_price.csv`, and `cryptocompare_historic_sol_price.csv`.
 - **Funding data** is cached separately (`binance_funding_data/`, `hyperliquid_fartcoin_funding_data/`).
