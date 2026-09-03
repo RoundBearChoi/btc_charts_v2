@@ -6,6 +6,8 @@ try:
 except Exception:
     pass  # fall back to whatever is available (usually Agg on pure headless)
 
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.ticker as ticker
@@ -41,39 +43,59 @@ VOLUME_COLOR = '#8F8C57'
 VOLUME_SMA_DAYS = 15
 VOLUME_SMA_COLOR = '#263549'
 
+# Coin menu (row order in this CSV is prompt order: 1..N)
+COINS_CSV = Path(__file__).with_name("coins.csv")
+
 # ==================================================
 # END OF CONFIGURATION
 # ==================================================
 
-def get_coin_choice() -> str:
-    """Expanded & future-proof coin selector"""
-    print("\n" + "="*60)
+def load_coins(csv_path: Path = COINS_CSV) -> pd.DataFrame:
+    """Load the coin list. Row order is menu order."""
+    if not csv_path.exists():
+        raise FileNotFoundError(f"Coin list not found: {csv_path}")
+
+    coins = pd.read_csv(csv_path)
+    coins.columns = coins.columns.str.strip().str.lower()
+
+    required = {"name", "symbol"}
+    missing = required - set(coins.columns)
+    if missing:
+        raise ValueError(f"{csv_path} is missing columns: {sorted(missing)}")
+
+    coins["name"] = coins["name"].astype(str).str.strip()
+    coins["symbol"] = coins["symbol"].astype(str).str.strip().str.upper()
+    coins = coins.dropna(subset=["name", "symbol"])
+    coins = coins[(coins["name"] != "") & (coins["symbol"] != "")]
+
+    if coins.empty:
+        raise ValueError(f"{csv_path} has no usable name/symbol rows")
+
+    return coins.reset_index(drop=True)
+
+
+def get_coin_choice() -> tuple[str, str]:
+    """Prompt 1..N from coins.csv. No free-form ticker."""
+    coins = load_coins()
+    n = len(coins)
+
+    print("\n" + "=" * 60)
     print("21/50/200 + Volume + RSI Chart - Coin Selection")
-    print("="*60)
-    print("1) BTC")
-    print("2) SOLANA")
-    print("3) MONERO")
-    print("4) FARTCOIN")
-    print("5) TROLL")
-    print("6) Any Other → type ticker (PEPE, DOGE, ETH, etc.)")
-    print("="*60)
+    print("=" * 60)
+    for i, row in coins.iterrows():
+        print(f"{i + 1}) {row['name']}")
+    print("=" * 60)
+
     while True:
-        choice = input("\nEnter 1-6 or type ticker: ").strip().upper()
-        if choice in ["1", "BTC"]:
-            return "BTC"
-        elif choice in ["2", "SOL", "SOLANA"]:
-            return "SOL"
-        elif choice in ["3", "XMR", "MONERO"]:
-            return "XMR"
-        elif choice in ["4", "FARTCOIN"]:
-            return "FARTCOIN"
-        elif choice in ["5", "TROLL"]:
-            return "TROLL"
-        elif choice and len(choice) >= 2:  # free-form ticker
-            print(f"→ Using custom ticker → {choice}")
-            return choice
-        else:
-            print("✘ Invalid. Try 1-6 or type a ticker.")
+        raw = input(f"\nEnter 1-{n}: ").strip()
+        if raw.isdigit():
+            idx = int(raw)
+            if 1 <= idx <= n:
+                row = coins.iloc[idx - 1]
+                name, symbol = row["name"], row["symbol"]
+                print(f"→ {name} ({symbol})")
+                return name, symbol
+        print(f"✘ Invalid. Enter a number from 1 to {n}.")
 
 def add_rsi(data_frame, window=14):
     delta = data_frame['close'].diff()
@@ -91,18 +113,8 @@ def add_rsi(data_frame, window=14):
     return data_frame
 
 def draw(block_window=BLOCK_WINDOW, log_scale=LOG_SCALE, days_back=DAYS_BACK, rsi_window=RSI_WINDOW):
-    coin_ticker = get_coin_choice()
-   
-    # Beautiful display names
-    coin_display_names = {
-        "BTC": "Bitcoin",
-        "SOL": "Solana",
-        "XMR": "Monero",
-        "FARTCOIN": "Fartcoin",
-        "TROLL": "Troll",
-    }
-    coin_name = coin_display_names.get(coin_ticker, coin_ticker)
-    
+    coin_name, coin_ticker = get_coin_choice()
+
     print(f"\n\U0001F4CA Loading data for {coin_name} ({coin_ticker})...")
     data_frame = price_data.get_price_data(coin=coin_ticker)
     

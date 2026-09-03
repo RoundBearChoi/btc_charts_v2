@@ -65,6 +65,7 @@ The standalone downloader updates **BTC**. Other tickers are fetched the first t
 
 ```
 src/
+├── coins.csv                         # Display name + CryptoCompare ticker for chart menus
 ├── get_price_data_cryptocompare.py   # Smart data downloader + cache (any coin)
 ├── indicators.py                     # Shared indicators (RSI, SMA, EMA, Z-Score, Pi Cycle)
 ├── plotting_utils.py                 # Common figure helpers & date formatters
@@ -93,13 +94,14 @@ src/
 | `get_price_data_cryptocompare.py` | Robust direct-API downloader. Supports **any ticker**. Smart incremental updates (only fetches missing recent days). Cleans zero-price pre-trading artifacts. Cache lives in `src/cryptocompare_data/`. Running the file directly updates BTC; pass another ticker through `get_price_data(coin=...)`. |
 | `indicators.py` | Centralized, reusable indicators: Wilder RSI, SMA, EMA, rolling Z-Score, Pi Cycle Top/Bottom. |
 | `plotting_utils.py` | Shared helpers for consistent 3-panel layouts and date axis formatting. |
+| `coins.csv` | `name,symbol` list used by `21_50_200_chart.py`. Menu order is row order (BTC, ETH, SOLANA, MONERO, FARTCOIN, TROLL). `symbol` is the CryptoCompare ticker (`SOL`, `XMR`, …). |
 
 ### Price / Technical Charts
 
 | Script | Description |
 |--------|-------------|
 | `zscore_chart.py` | Two-panel: Price (with optional 200 SMA) + Rolling Z-Score. Configurable window (default 365d). Multi-coin selector. Excellent for spotting statistical extremes. |
-| `21_50_200_chart.py` | Classic three-panel: Price + EMA21/SMA50/SMA200 + Volume bars + RSI. Menu includes BTC, SOL, XMR, FARTCOIN, TROLL, or any custom ticker. Fully configurable RSI window, grid styling, date range. |
+| `21_50_200_chart.py` | Classic three-panel: Price + EMA21/SMA50/SMA200 + Volume bars + RSI. Startup prompt is `1)`–`N)` from `src/coins.csv` (no free-form ticker). Fully configurable RSI window, grid styling, date range. |
 | `sma_vs_sma.py` | 111-day vs 50-day SMA + Volume + RSI. Same multi-coin + config pattern. |
 | `ratio_between_coins.py` | Offline ratio chart. Prompts for **BTC:FARTCOIN**, **BTC:MONERO**, or **SOLANA:FARTCOIN**. Configurable MAs (or EMAs) on top + Z-Score (or RSI) extremes panel on bottom. Uses existing CSVs only — download the pair first if a file is missing (Monero ticker is `XMR`, Solana is `SOL`). |
 | `pi_bottom_top.py` | Dual-panel Pi Cycle indicators (Bottom: 471 SMA × factor + 150 EMA; Top: 350 SMA × 2 + 111 SMA). |
@@ -121,7 +123,7 @@ src/
 Almost every chart script follows the same structure:
 
 1. **CONFIG block** at the very top (DAYS_BACK, windows, colors, grid style, figure size, etc.)
-2. Optional interactive coin selector (`1) BTC  2) SOLANA  3) MONERO  4) FARTCOIN  5) TROLL  6) type any ticker`)
+2. Optional interactive coin selector (`21_50_200_chart.py` reads `src/coins.csv`; other charts still use a hardcoded `1) BTC … 6) type any ticker` menu)
 3. `draw()` function that loads data → adds indicators → plots → `plt.show()`
 4. Shared `indicators.py` and `plotting_utils.py` to avoid duplication
 
@@ -134,7 +136,7 @@ On a machine with Tkinter + a GUI backend (typically TkAgg), charts open in an i
 ## Notes
 
 - **Tkinter** is required for interactive chart windows. On Debian/Ubuntu: `sudo apt install python3-tk`. It is not in `requirements.txt`.
-- **Multi-coin support**: Most price charts accept any CryptoCompare ticker (SOL, XMR, PEPE, DOGE, etc.).
+- **Multi-coin support**: `21_50_200_chart.py` only offers coins listed in `src/coins.csv`. Other price charts still accept any CryptoCompare ticker (SOL, XMR, PEPE, DOGE, etc.).
 - **Ratio chart** is offline-only. Expected cache names include `cryptocompare_historic_btc_price.csv`, `cryptocompare_historic_fartcoin_price.csv`, `cryptocompare_historic_xmr_price.csv`, and `cryptocompare_historic_sol_price.csv`.
 - **Funding data** is cached separately (`binance_funding_data/`, `hyperliquid_fartcoin_funding_data/`).
 - The `cryptocompare` package is **no longer used** — the downloader talks to the v2 API directly via `requests`.
