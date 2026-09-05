@@ -1,0 +1,185 @@
+--- a/src/ratio_between_coins.py
++++ b/src/ratio_between_coins.py
+@@ -49,6 +49,36 @@
+ MA_WIDTH = 1.6
+ MA_LINESTYLES = ['-', '--', '-.']  # Solid, dashed, dash-dot
+ 
++# -----------------------------------------------------------------------------
++# LONG-TERM CONTEXT (lighter overlays on the top panel)
++# Analogous to interactive_classic_200_week_sma.py, but kept CONFIG-driven
++# (no slider) so this script stays consistent with the rest of the toolkit.
++#
++# Do NOT reuse Pi Cycle 0.745 / 2.0 scale factors here. Those were calibrated
++# on BTC-USD price cycles, not on a coin/coin ratio. On a ratio they would
++# just draw two arbitrary bands.
++# -----------------------------------------------------------------------------
++ADD_LONG_MA = True
++LONG_MA_WINDOW = 365          # days. 200 = classic daily long MA; 365 = 1y; 1400 ≈ 200 weeks
++LONG_MA_MIN_PERIODS = None    # None → max(30, window // 2). Lets the line appear before the full window fills
++LONG_MA_COLOR = '#8FA3B8'     # light steel — quieter than the warm 7/30 MAs
++LONG_MA_WIDTH = 2.0
++LONG_MA_ALPHA = 0.42
++LONG_MA_STYLE = '-'
++
++# Highest peak vs lowest bottom of the *plotted* ratio.
++# RANGE_WINDOW = None  → expanding all-time high / low (staircase; only moves on new extremes)
++# RANGE_WINDOW = 1461  → 4-year rolling Donchian channel (cycle highs/lows that can decay)
++ADD_RANGE_ENVELOPE = True
++RANGE_WINDOW = None
++RANGE_HIGH_COLOR = '#9AA7B5'
++RANGE_LOW_COLOR = '#9AA7B5'
++RANGE_LINE_WIDTH = 1.05
++RANGE_LINE_ALPHA = 0.50
++RANGE_LINE_STYLE = ':'
++RANGE_FILL_COLOR = '#8FA3B8'
++RANGE_FILL_ALPHA = 0.07
++
+ # Title / labeling
+ TITLE_PREFIX = "BTC : FARTCOIN Ratio"
+ LOG_SCALE = False            # Rarely useful for ratios (can compress early explosive moves)
+@@ -321,6 +351,44 @@
+     return ratio_df
+ 
+ 
++def add_long_term_overlays(ratio_df: pd.DataFrame) -> pd.DataFrame:
++    """Add a quiet long SMA and/or a peak-vs-bottom envelope.
++
++    Kept separate from add_moving_averages() so the long line does not pick
++    up the warm short-MA colors, and so short-history pairs can still show
++    a partial long SMA via min_periods.
++    """
++    if ADD_LONG_MA and LONG_MA_WINDOW and LONG_MA_WINDOW > 1:
++        min_periods = LONG_MA_MIN_PERIODS
++        if min_periods is None:
++            min_periods = max(30, LONG_MA_WINDOW // 2)
++        min_periods = max(2, min(int(min_periods), int(LONG_MA_WINDOW), len(ratio_df)))
++        col = f"LongSMA{LONG_MA_WINDOW}"
++        ratio_df[col] = ratio_df["close"].rolling(
++            window=int(LONG_MA_WINDOW),
++            min_periods=min_periods,
++        ).mean()
++        valid = int(ratio_df[col].notna().sum())
++        print(f"\nLong-term overlay: {col}  ({valid:,} valid points, min_periods={min_periods})")
++        if valid == 0:
++            print("  [WARN] Not enough history for the long MA — line will be omitted.")
++
++    if ADD_RANGE_ENVELOPE:
++        if RANGE_WINDOW is None:
++            ratio_df["RangeHigh"] = ratio_df["close"].cummax()
++            ratio_df["RangeLow"] = ratio_df["close"].cummin()
++            print("Range envelope: expanding high / low of the plotted window")
++        else:
++            window = int(RANGE_WINDOW)
++            min_periods = max(5, window // 4)
++            min_periods = min(min_periods, window, len(ratio_df))
++            ratio_df["RangeHigh"] = ratio_df["close"].rolling(window, min_periods=min_periods).max()
++            ratio_df["RangeLow"] = ratio_df["close"].rolling(window, min_periods=min_periods).min()
++            print(f"Range envelope: {window}d rolling high / low")
++
++    return ratio_df
++
++
+ def add_extremes_indicator(ratio_df: pd.DataFrame) -> pd.DataFrame:
+     """Add Z-score or RSI indicator for the bottom panel.
+ 
+@@ -387,6 +455,43 @@
+         ax_bot = None
+ 
+     # ========== TOP PANEL: Ratio + Moving Averages ==========
++    # Peak/bottom envelope first so it sits behind the ratio and MAs
++    if ADD_RANGE_ENVELOPE and "RangeHigh" in ratio_df.columns and "RangeLow" in ratio_df.columns:
++        if RANGE_WINDOW is None:
++            high_label = "Peak (window high)"
++            low_label = "Bottom (window low)"
++        else:
++            high_label = f"{RANGE_WINDOW}d high"
++            low_label = f"{RANGE_WINDOW}d low"
++        ax_top.fill_between(
++            ratio_df.index,
++            ratio_df["RangeLow"],
++            ratio_df["RangeHigh"],
++            color=RANGE_FILL_COLOR,
++            alpha=RANGE_FILL_ALPHA,
++            zorder=1,
++        )
++        ax_top.plot(
++            ratio_df.index,
++            ratio_df["RangeHigh"],
++            label=high_label,
++            color=RANGE_HIGH_COLOR,
++            linewidth=RANGE_LINE_WIDTH,
++            linestyle=RANGE_LINE_STYLE,
++            alpha=RANGE_LINE_ALPHA,
++            zorder=2,
++        )
++        ax_top.plot(
++            ratio_df.index,
++            ratio_df["RangeLow"],
++            label=low_label,
++            color=RANGE_LOW_COLOR,
++            linewidth=RANGE_LINE_WIDTH,
++            linestyle=RANGE_LINE_STYLE,
++            alpha=RANGE_LINE_ALPHA,
++            zorder=2,
++        )
++
+     # Main ratio line
+     ax_top.plot(
+         ratio_df.index,
+@@ -394,9 +499,24 @@
+         label=RATIO_NAME,
+         color=RATIO_COLOR,
+         linewidth=RATIO_WIDTH,
+-        alpha=0.92
++        alpha=0.92,
++        zorder=4,
+     )
+ 
++    # Quiet long-term SMA (separate from the warm short-MA palette)
++    long_col = f"LongSMA{LONG_MA_WINDOW}"
++    if ADD_LONG_MA and long_col in ratio_df.columns and ratio_df[long_col].notna().any():
++        ax_top.plot(
++            ratio_df.index,
++            ratio_df[long_col],
++            label=f"SMA{LONG_MA_WINDOW} (long)",
++            color=LONG_MA_COLOR,
++            linewidth=LONG_MA_WIDTH,
++            linestyle=LONG_MA_STYLE,
++            alpha=LONG_MA_ALPHA,
++            zorder=3,
++        )
++
+     # Moving average lines (cycle colors and linestyles if many)
+     ma_cols = [c for c in ratio_df.columns if c.startswith(('SMA', 'EMA'))]
+     for idx, col in enumerate(ma_cols):
+@@ -409,7 +529,8 @@
+             color=color,
+             linewidth=MA_WIDTH,
+             linestyle=linestyle,
+-            alpha=0.88
++            alpha=0.88,
++            zorder=5,
+         )
+ 
+     # Dynamic title with context
+@@ -420,6 +541,13 @@
+     if DAYS_BACK:
+         title += f"  (last {DAYS_BACK} days)"
+     title += f"\n{ma_desc} overlay"
++    if ADD_LONG_MA:
++        title += f"  +  {LONG_MA_WINDOW}d long SMA"
++    if ADD_RANGE_ENVELOPE:
++        if RANGE_WINDOW is None:
++            title += "  +  peak/bottom envelope"
++        else:
++            title += f"  +  {RANGE_WINDOW}d high/low"
+     if has_bottom:
+         if BOTTOM_INDICATOR == "zscore":
+             title += f"   •   Z-Score {ZSCORE_WINDOW}d (ratio extremes)"
+@@ -626,6 +754,7 @@
+         prompt_user_for_pair()
+         ratio_df = load_and_align_data()
+         ratio_df = add_moving_averages(ratio_df)
++        ratio_df = add_long_term_overlays(ratio_df)
+         ratio_df = add_extremes_indicator(ratio_df)
+         draw_chart(ratio_df)
