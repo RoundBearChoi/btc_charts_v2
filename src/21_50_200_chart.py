@@ -43,12 +43,13 @@ VOLUME_COLOR = '#8F8C57'
 VOLUME_SMA_DAYS = 15
 VOLUME_SMA_COLOR = '#263549'
 
-# Coin menu (row order in this CSV is prompt order: 1..N)
+# Coin menu (row order in this CSV is prompt order: 1..N, then ALL)
 COINS_CSV = Path(__file__).with_name("coins.csv")
 
 # ==================================================
 # END OF CONFIGURATION
 # ==================================================
+
 
 def load_coins(csv_path: Path = COINS_CSV) -> pd.DataFrame:
     """Load the coin list. Row order is menu order."""
@@ -74,28 +75,41 @@ def load_coins(csv_path: Path = COINS_CSV) -> pd.DataFrame:
     return coins.reset_index(drop=True)
 
 
-def get_coin_choice() -> tuple[str, str]:
-    """Prompt 1..N from coins.csv. No free-form ticker."""
+def get_coin_choice() -> list[tuple[str, str]]:
+    """Prompt 1..N from coins.csv, plus ALL as the last option.
+
+    ALL means every coin listed above it, in that same order.
+    Returns a list of (name, symbol) pairs. One pair for a single
+    coin; all pairs when ALL is chosen. No free-form ticker.
+    """
     coins = load_coins()
     n = len(coins)
+    all_idx = n + 1
 
     print("\n" + "=" * 60)
     print("21/50/200 + Volume + RSI Chart - Coin Selection")
     print("=" * 60)
     for i, row in coins.iterrows():
         print(f"{i + 1}) {row['name']}")
+    print(f"{all_idx}) ALL")
     print("=" * 60)
 
     while True:
-        raw = input(f"\nEnter 1-{n}: ").strip()
+        raw = input(f"\nEnter 1-{all_idx} (or ALL): ").strip()
+        if raw.lower() == "all" or (raw.isdigit() and int(raw) == all_idx):
+            chosen = [(row["name"], row["symbol"]) for _, row in coins.iterrows()]
+            labels = ", ".join(name for name, _ in chosen)
+            print(f"→ ALL ({labels})")
+            return chosen
         if raw.isdigit():
             idx = int(raw)
             if 1 <= idx <= n:
                 row = coins.iloc[idx - 1]
                 name, symbol = row["name"], row["symbol"]
                 print(f"→ {name} ({symbol})")
-                return name, symbol
-        print(f"✘ Invalid. Enter a number from 1 to {n}.")
+                return [(name, symbol)]
+        print(f"✘ Invalid. Enter a number from 1 to {all_idx}, or ALL.")
+
 
 def add_rsi(data_frame, window=14):
     delta = data_frame['close'].diff()
@@ -103,21 +117,30 @@ def add_rsi(data_frame, window=14):
     loss = -delta.where(delta < 0, 0)
     avg_gain = gain.rolling(window=window, min_periods=window).mean()
     avg_loss = loss.rolling(window=window, min_periods=window).mean()
-    
+
     for i in range(window, len(data_frame)):
         avg_gain.iloc[i] = (avg_gain.iloc[i-1] * (window - 1) + gain.iloc[i]) / window
         avg_loss.iloc[i] = (avg_loss.iloc[i-1] * (window - 1) + loss.iloc[i]) / window
-    
+
     rs = avg_gain / avg_loss
     data_frame['RSI'] = 100 - (100 / (1 + rs))
     return data_frame
 
-def draw(block_window=BLOCK_WINDOW, log_scale=LOG_SCALE, days_back=DAYS_BACK, rsi_window=RSI_WINDOW):
-    coin_name, coin_ticker = get_coin_choice()
 
+def _backend_is_interactive() -> bool:
+    backend = matplotlib.get_backend().lower()
+    # Note: 'TkAgg' contains the substring 'agg', so we must NOT use 'agg' in backend
+    non_interactive = {'agg', 'svg', 'pdf', 'ps', 'cairo', 'template'}
+    return backend not in non_interactive
+
+
+def draw_one_chart(coin_name: str, coin_ticker: str, *,
+                   block_window=BLOCK_WINDOW, log_scale=LOG_SCALE,
+                   days_back=DAYS_BACK, rsi_window=RSI_WINDOW,
+                   close_after=True):
     print(f"\n\U0001F4CA Loading data for {coin_name} ({coin_ticker})...")
     data_frame = price_data.get_price_data(coin=coin_ticker)
-    
+
     if days_back is not None:
         data_frame = data_frame.sort_index().iloc[-days_back:]
 
@@ -125,10 +148,10 @@ def draw(block_window=BLOCK_WINDOW, log_scale=LOG_SCALE, days_back=DAYS_BACK, rs
     data_frame['EMA21'] = data_frame['close'].ewm(span=21, adjust=False).mean()
     data_frame['SMA50'] = data_frame['close'].rolling(window=50).mean()
     data_frame['SMA200'] = data_frame['close'].rolling(window=200).mean()
-    
+
     if VOLUME_SMA_DAYS > 0:
         data_frame['VOLUME_SMA'] = data_frame['volumeto'].rolling(window=VOLUME_SMA_DAYS).mean()
-    
+
     # RSI with configurable window
     data_frame = add_rsi(data_frame, window=rsi_window)
 
@@ -172,7 +195,7 @@ def draw(block_window=BLOCK_WINDOW, log_scale=LOG_SCALE, days_back=DAYS_BACK, rs
         lambda x, pos: f'${x/1e9:.1f}B' if x >= 1e9 else f'${x/1e6:.0f}M' if x >= 1e6 else f'${x:,.0f}'))
 
     # RSI
-    ax3.plot(data_frame.index, data_frame['RSI'], color='#FF9900', linewidth=1.5, 
+    ax3.plot(data_frame.index, data_frame['RSI'], color='#FF9900', linewidth=1.5,
              label=f'RSI({rsi_window})')
     ax3.axhline(70, color='#E15FC3', linestyle='--', alpha=0.6, label='Overbought')
     ax3.axhline(30, color='#00D118', linestyle='--', alpha=0.6, label='Oversold')
@@ -204,22 +227,46 @@ def draw(block_window=BLOCK_WINDOW, log_scale=LOG_SCALE, days_back=DAYS_BACK, rs
     # --------------------------------------------------
     # Smart display: interactive when possible, otherwise save PNG
     # --------------------------------------------------
-    backend = matplotlib.get_backend().lower()
-    # Note: 'TkAgg' contains the substring 'agg', so we must NOT use 'agg' in backend
-    non_interactive = {'agg', 'svg', 'pdf', 'ps', 'cairo', 'template'}
-    is_interactive = backend not in non_interactive
-
-    if not is_interactive:
+    if not _backend_is_interactive():
         # Headless / no usable display → save to file
         safe_name = coin_ticker.lower().replace(" ", "_")
         output_file = f"{safe_name}_21_50_200_rsi{rsi_window}.png"
         plt.savefig(output_file, dpi=150, bbox_inches='tight', facecolor='white')
         print(f"✅ Chart saved to: {output_file}")
         plt.close(fig)
-    else:
-        # Interactive backend available → show the window
-        print(f"🖥️  Using interactive backend: {matplotlib.get_backend()}")
-        plt.show(block=block_window)
+        return
+
+    # Interactive backend available → show the window
+    print(f"🖥️  Using interactive backend: {matplotlib.get_backend()}")
+    plt.show(block=block_window)
+    if close_after and block_window:
+        plt.close(fig)
+
+
+def draw(block_window=BLOCK_WINDOW, log_scale=LOG_SCALE, days_back=DAYS_BACK, rsi_window=RSI_WINDOW):
+    choices = get_coin_choice()
+    total = len(choices)
+
+    for i, (coin_name, coin_ticker) in enumerate(choices, start=1):
+        is_last = i == total
+        if total > 1:
+            print(f"\n[{i}/{total}] {coin_name}")
+
+        # ALL walks coins in list order. Wait on each window so the next
+        # coin only appears after the current one is closed. After the
+        # last coin, stop — no wrap, no second prompt.
+        per_coin_block = block_window if total == 1 else True
+        draw_one_chart(
+            coin_name,
+            coin_ticker,
+            block_window=per_coin_block,
+            log_scale=log_scale,
+            days_back=days_back,
+            rsi_window=rsi_window,
+            close_after=True,
+        )
+        if is_last and total > 1:
+            print(f"\nDone. Stopped after last coin ({coin_name}).")
 
 
 if __name__ == '__main__':
