@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-resistance_and_support_btc.py
+resistance_and_support.py
 
 Two-panel chart for a coin from src/coins.csv:
   1. Price + EMA21 / SMA50 / SMA200 as *dynamic* support or resistance
-     plus the latest swing high / swing low as *static* levels
+     plus recent swing highs / lows as *static* levels
   2. Volume (up-day / down-day bars) + volume SMA
 
 Rule used for moving averages:
@@ -14,13 +14,14 @@ Rule used for moving averages:
 Swing levels are calculated, not eyeballed:
   a bar is a swing high if its high is the max of `SWING_LEFT` bars before
   and `SWING_RIGHT` bars after. Same idea inverted for swing lows.
-  The most recent swing high above price is marked resistance.
-  The most recent swing low below price is marked support.
+
+The terminal also prints market structure from the last two confirmed
+swings: higher-high / higher-low vs lower-high / lower-low.
 
 Startup prompt matches 21_50_200_chart.py: 1..N from coins.csv, plus ALL.
 
 Run from repo root:
-    python src/resistance_and_support_btc.py
+    python src/resistance_and_support.py
 """
 
 from __future__ import annotations
@@ -34,17 +35,19 @@ except Exception:
 
 from pathlib import Path
 
+import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import pandas as pd
 
 import get_price_data_cryptocompare as price_data
 from indicators import add_ema, add_sma
-from plotting_utils import add_date_formatters
 
 # ====================== CONFIG ======================
 DAYS_BACK = 360            # chart window; None = full history
 BLOCK_WINDOW = True
+SHOW_GRID = True
+LOG_SCALE = False
 
 EMA_FAST = 21
 SMA_MID = 50
@@ -62,6 +65,7 @@ SMA50_COLOR = "#2ca02c"
 SMA200_COLOR = "#C80C01"
 SUPPORT_COLOR = "#2ca02c"
 RESISTANCE_COLOR = "#d62728"
+UNCONFIRMED_ALPHA = 0.12
 
 COINS_CSV = Path(__file__).with_name("coins.csv")
 # ====================================================
@@ -89,6 +93,31 @@ def price_axis_formatter(x, _p):
     return format_price(x)
 
 
+def naive_index(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df.index = pd.to_datetime(df.index)
+    if df.index.tz is not None:
+        df.index = df.index.tz_convert("UTC").tz_localize(None)
+    return df
+
+
+def add_window_date_formatters(ax, days_back: int | None):
+    """Year ticks are too sparse on a 1-year window."""
+    if days_back is None or days_back > 900:
+        ax.xaxis.set_major_locator(mdates.YearLocator())
+        ax.xaxis.set_minor_locator(mdates.MonthLocator())
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+    elif days_back > 240:
+        ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+        ax.xaxis.set_minor_locator(mdates.MonthLocator())
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
+    else:
+        ax.xaxis.set_major_locator(mdates.MonthLocator())
+        ax.xaxis.set_minor_locator(mdates.WeekdayLocator(byweekday=mdates.MO))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
+    ax.tick_params(axis="x", which="major", labelsize=9)
+
+
 def load_coins(csv_path: Path = COINS_CSV) -> pd.DataFrame:
     """Load the coin list. Row order is menu order."""
     if not csv_path.exists():
@@ -114,11 +143,7 @@ def load_coins(csv_path: Path = COINS_CSV) -> pd.DataFrame:
 
 
 def get_coin_choice() -> list[tuple[str, str]]:
-    """Prompt 1..N from coins.csv, plus ALL as the last option.
-
-    ALL means every coin listed above it, in that same order.
-    Returns a list of (name, symbol) pairs.
-    """
+    """Prompt 1..N from coins.csv, plus ALL as the last option."""
     coins = load_coins()
     n = len(coins)
     all_idx = n + 1
@@ -149,8 +174,8 @@ def get_coin_choice() -> list[tuple[str, str]]:
 
 
 def add_swing_points(df: pd.DataFrame, left: int = 8, right: int = 8) -> pd.DataFrame:
-    """Mark confirmed swing highs / lows. Right window means the newest
-    `right` bars cannot be confirmed yet (they still need future bars)."""
+    """Mark confirmed swing highs / lows. The newest `right` bars cannot
+    be confirmed yet because they still need future bars."""
     high = df["high"]
     low = df["low"]
     swing_high = pd.Series(False, index=df.index)
@@ -178,34 +203,77 @@ def classify_ma(price: float, ma_value: float) -> str:
     return "resistance"
 
 
-def latest_static_levels(df: pd.DataFrame) -> dict:
-    """Most recent confirmed swing high above price, swing low below price."""
-    last = df.iloc[-1]
-    price = float(last["close"])
+def swing_table(df: pd.DataFrame) -> pd.DataFrame:
+    highs = df.loc[df["swing_high"], ["high"]].rename(columns={"high": "price"})
+    highs["kind"] = "high"
+    lows = df.loc[df["swing_low"], ["low"]].rename(columns={"low": "price"})
+    lows["kind"] = "low"
+    out = pd.concat([highs, lows]).sort_index()
+    return out
+
+
+def structure_from_swings(df: pd.DataFrame) -> dict:
+    """Compare the last two confirmed highs and last two confirmed lows."""
     highs = df[df["swing_high"]]
     lows = df[df["swing_low"]]
+    last_highs = [
+        {"date": idx, "price": float(row["high"])}
+        for idx, row in highs.tail(2).iterrows()
+    ]
+    last_lows = [
+        {"date": idx, "price": float(row["low"])}
+        for idx, row in lows.tail(2).iterrows()
+    ]
 
-    res = highs[highs["high"] > price]
-    sup = lows[lows["low"] < price]
+    hh = hl = lh = ll = None
+    if len(last_highs) == 2:
+        hh = last_highs[1]["price"] > last_highs[0]["price"]
+        lh = last_highs[1]["price"] < last_highs[0]["price"]
+    if len(last_lows) == 2:
+        hl = last_lows[1]["price"] > last_lows[0]["price"]
+        ll = last_lows[1]["price"] < last_lows[0]["price"]
 
-    resistance = None
-    support = None
-    if not res.empty:
-        row = res.iloc[-1]
-        resistance = {"date": row.name, "price": float(row["high"])}
-    if not sup.empty:
-        row = sup.iloc[-1]
-        support = {"date": row.name, "price": float(row["low"])}
-    return {"price": price, "resistance": resistance, "support": support}
+    if hh and hl:
+        label = "uptrend (HH + HL)"
+    elif lh and ll:
+        label = "downtrend (LH + LL)"
+    elif hh and ll:
+        label = "mixed (HH + LL)"
+    elif lh and hl:
+        label = "mixed (LH + HL)"
+    else:
+        label = "not enough confirmed swings"
+
+    price = float(df.iloc[-1]["close"])
+    res_above = highs[highs["high"] > price]
+    sup_below = lows[lows["low"] < price]
+    nearest_res = None
+    nearest_sup = None
+    if not res_above.empty:
+        row = res_above.iloc[-1]
+        nearest_res = {"date": row.name, "price": float(row["high"])}
+    if not sup_below.empty:
+        row = sup_below.iloc[-1]
+        nearest_sup = {"date": row.name, "price": float(row["low"])}
+
+    return {
+        "price": price,
+        "label": label,
+        "last_highs": last_highs,
+        "last_lows": last_lows,
+        "nearest_resistance": nearest_res,
+        "nearest_support": nearest_sup,
+    }
 
 
-def print_levels(df: pd.DataFrame, swings: dict, coin_name: str, coin_ticker: str):
+def print_levels(df: pd.DataFrame, structure: dict, coin_name: str, coin_ticker: str):
     last = df.iloc[-1]
     price = float(last["close"])
     print("=" * 64)
-    print(f"{coin_name} ({coin_ticker})  dynamic S/R + latest swing levels")
+    print(f"{coin_name} ({coin_ticker})  dynamic S/R + swing structure")
     print("=" * 64)
     print(f"Latest close:    {format_price(price)}   ({df.index[-1].date()})")
+    print(f"Structure:       {structure['label']}")
     print()
     print(f"{'MA':<10}{'Value':>14}{'Role':>14}{'Distance':>12}")
     print("-" * 50)
@@ -220,28 +288,45 @@ def print_levels(df: pd.DataFrame, swings: dict, coin_name: str, coin_ticker: st
         print(f"{label:<10}{format_price(value):>14}{role:>14}{dist:>12}")
 
     print()
-    if swings["resistance"]:
-        r = swings["resistance"]
-        print(
-            f"Latest swing resistance: {format_price(r['price'])}  "
-            f"({r['date'].date()})   "
-            f"{((price - r['price']) / r['price'] * 100):+.1f}% vs price"
-        )
+    print("Last confirmed swing highs:")
+    if structure["last_highs"]:
+        for i, row in enumerate(structure["last_highs"], start=1):
+            tag = "" if len(structure["last_highs"]) == 1 else ("prev" if i == 1 else "latest")
+            print(f"  {tag:<7} {format_price(row['price'])}  ({row['date'].date()})")
     else:
-        print("Latest swing resistance: none above current price in this window")
+        print("  none")
 
-    if swings["support"]:
-        s = swings["support"]
+    print("Last confirmed swing lows:")
+    if structure["last_lows"]:
+        for i, row in enumerate(structure["last_lows"], start=1):
+            tag = "" if len(structure["last_lows"]) == 1 else ("prev" if i == 1 else "latest")
+            print(f"  {tag:<7} {format_price(row['price'])}  ({row['date'].date()})")
+    else:
+        print("  none")
+
+    print()
+    if structure["nearest_resistance"]:
+        r = structure["nearest_resistance"]
         print(
-            f"Latest swing support:    {format_price(s['price'])}  "
-            f"({s['date'].date()})   "
-            f"{((price - s['price']) / s['price'] * 100):+.1f}% vs price"
+            f"Nearest swing R above price: {format_price(r['price'])}  "
+            f"({r['date'].date()})"
         )
     else:
-        print("Latest swing support: none below current price in this window")
+        print("Nearest swing R above price: none in this window")
+
+    if structure["nearest_support"]:
+        s = structure["nearest_support"]
+        print(
+            f"Nearest swing S below price: {format_price(s['price'])}  "
+            f"({s['date'].date()})"
+        )
+    else:
+        print("Nearest swing S below price: none in this window")
+
     print()
     print("MA rule: above the average = support, below = resistance.")
-    print("Swing rule: last confirmed pivot high/low, not an eyeballed round number.")
+    print("Swing rule: confirmed pivot only after SWING_RIGHT extra bars.")
+    print("Structure uses the last two confirmed highs and last two lows.")
     print("=" * 64 + "\n")
 
 
@@ -255,17 +340,15 @@ def draw_one_chart(
 ):
     print(f"\nLoading {coin_name} ({coin_ticker}) price data...")
     df = price_data.get_price_data(coin=coin_ticker).copy()
-    df.index = pd.to_datetime(df.index).tz_localize(None)
-    df = df.sort_index()
+    df = naive_index(df).sort_index()
 
     required = {"open", "high", "low", "close", "volumeto"}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"{coin_ticker} data is missing columns: {sorted(missing)}")
 
-    if days_back:
-        df = df.iloc[-days_back:]
-
+    # Indicators and swings on full history so a short window still has SMA200
+    # and pivots that were confirmed before the visible start date.
     df = add_ema(df, EMA_FAST)
     df = add_sma(df, SMA_MID)
     df = add_sma(df, SMA_SLOW)
@@ -273,8 +356,11 @@ def draw_one_chart(
     df["vol_sma"] = df["volumeto"].rolling(window=VOLUME_SMA_DAYS).mean()
     df["up_day"] = df["close"] >= df["open"]
 
-    swings = latest_static_levels(df)
-    print_levels(df, swings, coin_name, coin_ticker)
+    if days_back:
+        df = df.iloc[-days_back:]
+
+    structure = structure_from_swings(df)
+    print_levels(df, structure, coin_name, coin_ticker)
 
     last = df.iloc[-1]
     price = float(last["close"])
@@ -294,24 +380,38 @@ def draw_one_chart(
         df.index, df[f"SMA{SMA_SLOW}"],
         color=SMA200_COLOR, linewidth=1.4, linestyle="--", label=f"SMA{SMA_SLOW}",
     )
+    if LOG_SCALE:
+        ax1.set_yscale("log")
 
     sh = df[df["swing_high"]]
     sl = df[df["swing_low"]]
     ax1.scatter(sh.index, sh["high"], color=RESISTANCE_COLOR, s=18, zorder=5, label="Swing high")
     ax1.scatter(sl.index, sl["low"], color=SUPPORT_COLOR, s=18, zorder=5, label="Swing low")
 
-    if swings["resistance"]:
+    # Prior swing vs latest swing: shows whether the floor/ceiling moved
+    if len(structure["last_highs"]) == 2:
+        prev_h = structure["last_highs"][0]["price"]
+        ax1.axhline(prev_h, color=RESISTANCE_COLOR, linestyle=":", linewidth=0.9, alpha=0.35)
+    if structure["nearest_resistance"]:
         ax1.axhline(
-            swings["resistance"]["price"],
-            color=RESISTANCE_COLOR, linestyle=":", linewidth=1.2, alpha=0.85,
-            label=f"Swing R {format_price(swings['resistance']['price'])}",
+            structure["nearest_resistance"]["price"],
+            color=RESISTANCE_COLOR, linestyle=":", linewidth=1.2, alpha=0.9,
+            label=f"Swing R {format_price(structure['nearest_resistance']['price'])}",
         )
-    if swings["support"]:
+    if len(structure["last_lows"]) == 2:
+        prev_l = structure["last_lows"][0]["price"]
+        ax1.axhline(prev_l, color=SUPPORT_COLOR, linestyle=":", linewidth=0.9, alpha=0.35)
+    if structure["nearest_support"]:
         ax1.axhline(
-            swings["support"]["price"],
-            color=SUPPORT_COLOR, linestyle=":", linewidth=1.2, alpha=0.85,
-            label=f"Swing S {format_price(swings['support']['price'])}",
+            structure["nearest_support"]["price"],
+            color=SUPPORT_COLOR, linestyle=":", linewidth=1.2, alpha=0.9,
+            label=f"Swing S {format_price(structure['nearest_support']['price'])}",
         )
+
+    if len(df) > SWING_RIGHT:
+        unconfirmed_from = df.index[-SWING_RIGHT]
+        ax1.axvspan(unconfirmed_from, df.index[-1], color="#888888", alpha=UNCONFIRMED_ALPHA)
+        ax2.axvspan(unconfirmed_from, df.index[-1], color="#888888", alpha=UNCONFIRMED_ALPHA)
 
     x_last = df.index[-1]
     for col, color in (
@@ -334,17 +434,20 @@ def draw_one_chart(
             va="center",
         )
 
-    title = f"{coin_name} • Moving-average S/R + latest swing levels + volume"
+    title = f"{coin_name} • S/R + swings • {structure['label']}"
     if days_back:
         title += f" — last {days_back} days"
-    ax1.set_title(title, fontsize=14, pad=12)
+    if LOG_SCALE:
+        title += " (LOG)"
+    ax1.set_title(title, fontsize=13, pad=12)
     ax1.set_ylabel("Price (USD)")
     ax1.yaxis.set_major_formatter(ticker.FuncFormatter(price_axis_formatter))
     ax1.legend(loc="upper left", fontsize=8, ncol=2, framealpha=0.92)
-    ax1.grid(True, alpha=0.3)
+    if SHOW_GRID:
+        ax1.grid(True, alpha=0.3)
 
     vol_colors = ["#2ca02c" if up else "#d62728" for up in df["up_day"]]
-    ax2.bar(df.index, df["volumeto"], color=vol_colors, width=1.0, alpha=0.75, label="Volume")
+    ax2.bar(df.index, df["volumeto"], color=vol_colors, width=0.9, alpha=0.75, label="Volume")
     ax2.plot(
         df.index, df["vol_sma"],
         color="#263549", linewidth=1.4, label=f"{VOLUME_SMA_DAYS}d vol SMA",
@@ -357,8 +460,9 @@ def draw_one_chart(
         )
     )
     ax2.legend(loc="upper left", fontsize=8)
-    ax2.grid(True, alpha=0.3)
-    add_date_formatters(ax2)
+    if SHOW_GRID:
+        ax2.grid(True, alpha=0.3)
+    add_window_date_formatters(ax2, days_back)
 
     plt.tight_layout()
 
