@@ -59,9 +59,10 @@ SWING_RIGHT = 8
 
 VOLUME_SMA_DAYS = 20
 
-FIGURE_SIZE = (14, 10)     # extra height reserved for the MA footer
+FIGURE_SIZE = (14, 10.4)   # extra height reserved for the MA footer + gap
 SHOW_MA_FOOTER = True      # table under volume: value / role / distance
 SHOW_DISTANCE_ON_LABELS = True  # also append % distance to right-edge MA tags
+FOOTER_GAP = 0.06          # figure-fraction gap between volume and the MA table
 
 CLOSE_COLOR = "#1f77b4"
 EMA_COLOR = "#E15FC3"
@@ -315,7 +316,7 @@ def draw_ma_footer(ax, df: pd.DataFrame, structure: dict):
         "distance = (close − MA) / MA",
         fontsize=9,
         loc="left",
-        pad=2,
+        pad=8,
         color="#333333",
     )
 
@@ -403,7 +404,11 @@ def draw_one_chart(
 
     if SHOW_MA_FOOTER:
         fig = plt.figure(figsize=FIGURE_SIZE)
-        gs = fig.add_gridspec(3, 1, height_ratios=[3.2, 1.0, 0.72], hspace=0.14)
+        gs = fig.add_gridspec(
+            3, 1,
+            height_ratios=[3.2, 1.0, 0.78],
+            hspace=0.18,
+        )
         ax1 = fig.add_subplot(gs[0])
         ax2 = fig.add_subplot(gs[1], sharex=ax1)
         ax3 = fig.add_subplot(gs[2])
@@ -510,6 +515,14 @@ def draw_one_chart(
         draw_ma_footer(ax3, df, structure)
 
     fig.tight_layout()
+    if SHOW_MA_FOOTER:
+        # tight_layout packs the footer against volume; drop the table
+        # without also stretching the gap between price and volume.
+        box2 = ax2.get_position()
+        box3 = ax3.get_position()
+        new_top = box2.y0 - FOOTER_GAP
+        new_bottom = max(0.03, new_top - box3.height)
+        ax3.set_position([box3.x0, new_bottom, box3.width, new_top - new_bottom])
 
     if not _backend_is_interactive():
         safe = coin_ticker.lower().replace(" ", "_")
