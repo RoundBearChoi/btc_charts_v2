@@ -35,8 +35,12 @@ def add_rsi(
         avg_gain.iloc[i] = (avg_gain.iloc[i - 1] * (window - 1) + gain.iloc[i]) / window
         avg_loss.iloc[i] = (avg_loss.iloc[i - 1] * (window - 1) + loss.iloc[i]) / window
 
-    rs = avg_gain / avg_loss
-    df[out_col] = 100 - (100 / (1 + rs))
+    avg_loss_safe = avg_loss.replace(0, np.nan)
+    rs = avg_gain / avg_loss_safe
+    rsi = 100 - (100 / (1 + rs))
+    rsi = rsi.mask((avg_loss == 0) & (avg_gain > 0), 100.0)
+    rsi = rsi.mask((avg_loss == 0) & (avg_gain == 0), 50.0)
+    df[out_col] = rsi
     return df
 
 
@@ -121,3 +125,24 @@ def add_zscore(
 
     df[out_col] = (df[price_col] - rolling_mean) / rolling_std
     return df
+
+
+def last_crossover(fast: pd.Series, slow: pd.Series) -> tuple[Optional[pd.Timestamp], Optional[str]]:
+    """Return (timestamp, 'bullish'|'bearish') of the most recent fast/slow cross."""
+    aligned = pd.concat({"fast": fast, "slow": slow}, axis=1).dropna()
+    if len(aligned) < 2:
+        return None, None
+
+    prev_fast = aligned["fast"].shift(1)
+    prev_slow = aligned["slow"].shift(1)
+    bull = (aligned["fast"] > aligned["slow"]) & (prev_fast <= prev_slow)
+    bear = (aligned["fast"] < aligned["slow"]) & (prev_fast >= prev_slow)
+
+    last_bull = aligned.index[bull].max() if bull.any() else None
+    last_bear = aligned.index[bear].max() if bear.any() else None
+
+    if last_bull is None and last_bear is None:
+        return None, None
+    if last_bear is None or (last_bull is not None and last_bull >= last_bear):
+        return last_bull, "bullish"
+    return last_bear, "bearish"
