@@ -27,6 +27,8 @@ python src/ratio_between_coins.py
 python src/funding_rates_btc_binance.py
 python src/spot_etf_btc.py
 python src/resistance_and_support.py
+python src/usd_m2_vs_btc.py
+python src/m2_fair_value_btc.py
 
 # Skip the coin prompt (21/50/200 chart)
 python src/21_50_200_chart.py --coin BTC
@@ -85,6 +87,7 @@ src/
 ├── rsi_vs_halving.py                 # Monthly RSI colored by time-to-next-halving
 ├── interactive_classic_200_week_sma.py  # Interactive weekly SMA slider
 ├── usd_m2_vs_btc.py                  # BTC vs US M2 money supply (FRED)
+├── m2_fair_value_btc.py              # BTC vs rolling US-M2 implied fair value
 ├── resistance_and_support.py         # MAs as live S/R + swing levels + volume
 │
 ├── funding_rates_btc_binance.py      # BTC Price + Funding Rate + Z-Score (Binance)
@@ -117,7 +120,8 @@ src/
 | `pi_bottom_top.py` | Dual-panel Pi Cycle indicators (Bottom: 471 SMA × factor + 150 EMA; Top: 350 SMA × 2 + 111 SMA). |
 | `rsi_vs_halving.py` | Monthly RSI line colored by months remaining until next Bitcoin halving. Includes cycle progress markers, halving vertical lines, and horizontal RSI levels. |
 | `interactive_classic_200_week_sma.py` | Interactive slider (3–250 weeks) for the classic weekly SMA. Uses Sunday weekly closes for accuracy. |
-| `usd_m2_vs_btc.py` | Two-panel comparison of monthly BTC close vs US M2 money supply (FRED). |
+| `usd_m2_vs_btc.py` | Two-panel comparison of monthly BTC close vs US M2 money supply (FRED). Raw levels — the long-term “money stock vs price” view. |
+| `m2_fair_value_btc.py` | Companion to `usd_m2_vs_btc.py`. Rolling 48-month log(BTC) ~ log(M2) fair value on a log price axis, plus residual z-score. Prints spot / implied / gap. Fit uses prior months only (no look-ahead). US M2SL, not global M2. Headless runs save `output/m2_fair_value_btc.png`. |
 | `resistance_and_support.py` | Two-panel chart: price with EMA21/SMA50/SMA200 labeled as live support or resistance, latest confirmed swing high/low, and up/down volume. Prints the current levels in the terminal. Same `coins.csv` menu as `21_50_200_chart.py`. |
 
 ### Funding Rate Charts
@@ -146,7 +150,7 @@ Almost every chart script follows the same structure:
 
 This makes it very easy to tweak look-and-feel or analysis parameters without touching the plotting logic.
 
-On a machine with Tkinter + a GUI backend (typically TkAgg), charts open in an interactive window. On headless / SSH sessions, or if Tkinter is missing, `21_50_200_chart.py` saves a PNG under `output/` instead of calling `plt.show()`.
+On a machine with Tkinter + a GUI backend (typically TkAgg), charts open in an interactive window. On headless / SSH sessions, or if Tkinter is missing, `21_50_200_chart.py` and `m2_fair_value_btc.py` save a PNG under `output/` instead of calling `plt.show()`.
 
 ---
 
