@@ -104,7 +104,7 @@ src/
 | Script | Description |
 |--------|-------------|
 | `get_price_data_cryptocompare.py` | Robust direct-API downloader. Supports **any ticker**. Smart incremental updates (only fetches missing recent days). Cleans zero-price pre-trading artifacts. Cache lives in `src/cryptocompare_data/`. Running the file directly updates BTC; pass another ticker through `get_price_data(coin=...)`. |
-| `indicators.py` | Centralized, reusable indicators: Wilder RSI, SMA, EMA, rolling Z-Score, Pi Cycle Top/Bottom, last crossover helper. |
+| `indicators.py` | Centralized, reusable indicators: Wilder RSI, SMA, EMA, rolling Z-Score, Pi Cycle Top/Bottom, last crossover helper (`crossed above` / `crossed below`). |
 | `plotting_utils.py` | Shared helpers for 3-panel layouts, price/volume formatters, grid styling, and window-aware date ticks. |
 | `coin_menu.py` | Shared `coins.csv` loader and `1)`–`N)` / `ALL` prompt used by `21_50_200_chart.py` and `resistance_and_support.py`. |
 | `coins.csv` | `name,symbol` list used by `21_50_200_chart.py`, `resistance_and_support.py`, and `ratio_between_coins.py`. Menu / pair order is row order (BTC, ETH, SOLANA, MONERO, FARTCOIN, TROLL). `symbol` is the CryptoCompare ticker (`SOL`, `XMR`, …). |
@@ -114,7 +114,7 @@ src/
 | Script | Description |
 |--------|-------------|
 | `zscore_chart.py` | Two-panel: Price (with optional 200 SMA) + Rolling Z-Score. Configurable window (default 365d). Multi-coin selector. Excellent for spotting statistical extremes. |
-| `21_50_200_chart.py` | Classic three-panel: Price + EMA21/SMA50/SMA200 + Volume + RSI. Computes MAs/RSI on full history then slices the window. 21/50 trend cloud, 21/50 and 50/200 cross markers, up/down volume, last-value box, RSI zones, and a terminal snapshot (regime + last crosses). Prompt is `1)`–`N)` / `ALL` from `src/coins.csv`, or skip it with `--coin BTC` / `--all` / `--log` / `--days 365`. Headless runs save under `output/`. |
+| `21_50_200_chart.py` | Classic three-panel: Price + EMA21/SMA50/SMA200 + Volume + RSI. Computes MAs/RSI on full history then slices the window. 21/50 trend cloud, 21/50 and 50/200 cross markers, up/down volume, last-value box, RSI zones, and a terminal snapshot (above/below stack, last crosses, SMA200 held/lost/retested, invalidation). Prompt is `1)`–`N)` / `ALL` from `src/coins.csv`, or skip it with `--coin BTC` / `--all` / `--log` / `--days 365`. Headless runs save under `output/`. |
 | `sma_vs_sma.py` | 111-day vs 50-day SMA + Volume + RSI. Same multi-coin + config pattern. |
 | `ratio_between_coins.py` | Offline ratio chart. Builds every unique pair from `src/coins.csv` in row order (`BTC:ETH`, `BTC:SOLANA`, … then `ETH:SOLANA`, …) and skips reverse pairs (`ETH:BTC`). Configurable MAs (or EMAs) on top + Z-Score (or RSI) extremes panel on bottom. Uses existing CSVs only — download both tickers first if a file is missing (`SOL`, `XMR`, …). |
 | `pi_bottom_top.py` | Dual-panel Pi Cycle indicators (Bottom: 471 SMA × factor + 150 EMA; Top: 350 SMA × 2 + 111 SMA). |
@@ -122,7 +122,7 @@ src/
 | `interactive_classic_200_week_sma.py` | Interactive slider (3–250 weeks) for the classic weekly SMA. Uses Sunday weekly closes for accuracy. |
 | `usd_m2_vs_btc.py` | Two-panel comparison of monthly BTC close vs US M2 money supply (FRED). Raw levels — the long-term “money stock vs price” view. |
 | `m2_fair_value_btc.py` | Companion to `usd_m2_vs_btc.py`. Rolling 48-month log(BTC) ~ log(M2) fair value on a log price axis, plus residual z-score. Prints spot / implied / gap. Fit uses prior months only (no look-ahead). US M2SL, not global M2. Headless runs save `output/m2_fair_value_btc.png`. |
-| `resistance_and_support.py` | Two-panel chart: price with EMA21/SMA50/SMA200 labeled as live support or resistance, latest confirmed swing high/low, and up/down volume. Prints the current levels in the terminal. Same `coins.csv` menu as `21_50_200_chart.py`. |
+| `resistance_and_support.py` | Two-panel chart: price with EMA21/SMA50/SMA200 labeled as live support or resistance, latest confirmed swing high/low, and up/down volume. Prints HH/HL/LH/LL structure, SMA200 held/lost/retested, and the invalidation level. Same `coins.csv` menu as `21_50_200_chart.py`. |
 
 ### Funding Rate Charts
 
@@ -163,6 +163,19 @@ On a machine with Tkinter + a GUI backend (typically TkAgg), charts open in an i
 - **ETF flow data** is cached in `src/spot_etf_data/` and refreshes at most every 12 hours.
 - The `cryptocompare` package is **no longer used** — the downloader talks to the v2 API directly via `requests`.
 - All scripts are designed to be run from the repo root: `python src/<script>.py`
+
+---
+
+## Chart language
+
+Terminal snapshots and titles describe position, not a forecast:
+
+- **above / below** — close vs a moving average
+- **held / lost** — consecutive sessions on the current side of SMA200
+- **retested / not retested** — whether price has tagged SMA200 again after the last cross onto this side
+- **invalidation** — the close that would flip that SMA200 side, or the next confirmed swing that would change HH/HL/LH/LL structure
+
+The scripts do not print "bullish" or "bearish".
 
 ---
 
