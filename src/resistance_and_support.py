@@ -2,10 +2,12 @@
 """
 resistance_and_support.py
 
-Two-panel chart for a coin from src/coins.csv:
+Two-panel chart for a coin from src/coins.csv, plus a compact MA snapshot
+under the volume pane:
   1. Price + EMA21 / SMA50 / SMA200 as *dynamic* support or resistance
      plus recent swing highs / lows as *static* levels
   2. Volume (up-day / down-day bars) + volume SMA
+  3. Footer table: MA value, support/resistance role, % distance from close
 
 Rule used for moving averages:
   price above the MA  -> that MA is treated as support
@@ -57,7 +59,10 @@ SWING_RIGHT = 8
 
 VOLUME_SMA_DAYS = 20
 
-FIGURE_SIZE = (14, 9)
+FIGURE_SIZE = (14, 10)     # extra height reserved for the MA footer
+SHOW_MA_FOOTER = True      # table under volume: value / role / distance
+SHOW_DISTANCE_ON_LABELS = True  # also append % distance to right-edge MA tags
+
 CLOSE_COLOR = "#1f77b4"
 EMA_COLOR = "#E15FC3"
 SMA50_COLOR = "#2ca02c"
@@ -146,6 +151,37 @@ def classify_ma(price: float, ma_value: float) -> str:
     return "resistance"
 
 
+def format_distance(price: float, ma_value: float) -> str:
+    if pd.isna(ma_value) or ma_value == 0:
+        return "n/a"
+    return f"{(price - ma_value) / ma_value * 100:+.1f}%"
+
+
+def ma_snapshot_rows(df: pd.DataFrame) -> list[dict]:
+    """Latest MA value, S/R role, and % distance from close."""
+    last = df.iloc[-1]
+    price = float(last["close"])
+    specs = (
+        (f"EMA{EMA_FAST}", f"EMA{EMA_FAST}", EMA_COLOR),
+        (f"SMA{SMA_MID}", f"SMA{SMA_MID}", SMA50_COLOR),
+        (f"SMA{SMA_SLOW}", f"SMA{SMA_SLOW}", SMA200_COLOR),
+    )
+    rows = []
+    for label, col, color in specs:
+        value = float(last[col]) if pd.notna(last[col]) else float("nan")
+        rows.append(
+            {
+                "label": label,
+                "col": col,
+                "color": color,
+                "value": value,
+                "role": classify_ma(price, value),
+                "dist": format_distance(price, value),
+            }
+        )
+    return rows
+
+
 def swing_table(df: pd.DataFrame) -> pd.DataFrame:
     highs = df.loc[df["swing_high"], ["high"]].rename(columns={"high": "price"})
     highs["kind"] = "high"
@@ -218,17 +254,10 @@ def print_levels(df: pd.DataFrame, structure: dict, coin_name: str, coin_ticker:
     print(f"Latest close:    {format_price(price)}   ({df.index[-1].date()})")
     print(f"Structure:       {structure['label']}")
     print()
-    print(f"{'MA':<10}{'Value':>14}{'Role':>14}{'Distance':>12}")
-    print("-" * 50)
-    for label, col in (
-        (f"EMA{EMA_FAST}", f"EMA{EMA_FAST}"),
-        (f"SMA{SMA_MID}", f"SMA{SMA_MID}"),
-        (f"SMA{SMA_SLOW}", f"SMA{SMA_SLOW}"),
-    ):
-        value = float(last[col]) if pd.notna(last[col]) else float("nan")
-        role = classify_ma(price, value)
-        dist = "n/a" if pd.isna(value) else f"{(price - value) / value * 100:+.1f}%"
-        print(f"{label:<10}{format_price(value):>14}{role:>14}{dist:>12}")
+    print(f"{'MA':<10}{'Value':>14}{'Role':>14}")
+    print("-" * 38)
+    for row in ma_snapshot_rows(df):
+        print(f"{row['label']:<10}{format_price(row['value']):>14}{row['role']:>14}")
 
     print()
     print("Last confirmed swing highs:")
@@ -270,7 +299,70 @@ def print_levels(df: pd.DataFrame, structure: dict, coin_name: str, coin_ticker:
     print("MA rule: above the average = support, below = resistance.")
     print("Swing rule: confirmed pivot only after SWING_RIGHT extra bars.")
     print("Structure uses the last two confirmed highs and last two lows.")
+    print("Distance to each MA is on the chart footer / right-edge labels.")
     print("=" * 64 + "\n")
+
+
+def draw_ma_footer(ax, df: pd.DataFrame, structure: dict):
+    """Compact table under the volume pane. Not a third data plot."""
+    ax.set_axis_off()
+    last_date = df.index[-1].date()
+    price = float(df.iloc[-1]["close"])
+    rows = ma_snapshot_rows(df)
+
+    ax.set_title(
+        f"Close {format_price(price)}  ({last_date})   ·   {structure['label']}   ·   "
+        "distance = (close − MA) / MA",
+        fontsize=9,
+        loc="left",
+        pad=2,
+        color="#333333",
+    )
+
+    cell_text = [
+        [row["label"], format_price(row["value"]), row["role"], row["dist"]]
+        for row in rows
+    ]
+    table = ax.table(
+        cellText=cell_text,
+        colLabels=["MA", "Value", "Role", "Distance"],
+        loc="upper center",
+        cellLoc="center",
+        colLoc="center",
+    )
+    table.auto_set_font_size(False)
+    table.set_fontsize(9)
+    table.scale(1.0, 1.35)
+
+    header_bg = "#263549"
+    support_bg = "#e8f6e8"
+    resist_bg = "#fdecea"
+    na_bg = "#f4f4f4"
+
+    for col in range(4):
+        cell = table[0, col]
+        cell.set_facecolor(header_bg)
+        cell.set_text_props(color="white", weight="bold")
+        cell.set_edgecolor("#ffffff")
+
+    for i, row in enumerate(rows, start=1):
+        if row["role"] == "support":
+            role_bg = support_bg
+            role_fg = SUPPORT_COLOR
+        elif row["role"] == "resistance":
+            role_bg = resist_bg
+            role_fg = RESISTANCE_COLOR
+        else:
+            role_bg = na_bg
+            role_fg = "#555555"
+
+        table[i, 0].set_text_props(color=row["color"], weight="bold")
+        table[i, 2].set_facecolor(role_bg)
+        table[i, 2].set_text_props(color=role_fg, weight="bold")
+        table[i, 3].set_facecolor(role_bg)
+        table[i, 3].set_text_props(color=role_fg, weight="bold")
+        for col in range(4):
+            table[i, col].set_edgecolor("#dddddd")
 
 
 def draw_one_chart(
@@ -307,13 +399,23 @@ def draw_one_chart(
 
     last = df.iloc[-1]
     price = float(last["close"])
+    ma_rows = ma_snapshot_rows(df)
 
-    fig, (ax1, ax2) = plt.subplots(
-        2, 1,
-        figsize=FIGURE_SIZE,
-        gridspec_kw={"height_ratios": [3.2, 1]},
-        sharex=True,
-    )
+    if SHOW_MA_FOOTER:
+        fig = plt.figure(figsize=FIGURE_SIZE)
+        gs = fig.add_gridspec(3, 1, height_ratios=[3.2, 1.0, 0.72], hspace=0.14)
+        ax1 = fig.add_subplot(gs[0])
+        ax2 = fig.add_subplot(gs[1], sharex=ax1)
+        ax3 = fig.add_subplot(gs[2])
+        plt.setp(ax1.get_xticklabels(), visible=False)
+    else:
+        fig, (ax1, ax2) = plt.subplots(
+            2, 1,
+            figsize=FIGURE_SIZE,
+            gridspec_kw={"height_ratios": [3.2, 1]},
+            sharex=True,
+        )
+        ax3 = None
     plt.style.use("fast")
 
     ax1.plot(df.index, df["close"], color=CLOSE_COLOR, linewidth=1.25, label=f"{coin_name} Close")
@@ -334,7 +436,7 @@ def draw_one_chart(
     # Prior swing vs latest swing: shows whether the floor/ceiling moved
     if len(structure["last_highs"]) == 2:
         prev_h = structure["last_highs"][0]["price"]
-        ax1.axhline(prev_h, color=RESISTANCE_COLOR, linestyle=":", linewidth=0.9, alpha=0.35)
+    ax1.axhline(prev_h, color=RESISTANCE_COLOR, linestyle=":", linewidth=0.9, alpha=0.35)
     if structure["nearest_resistance"]:
         ax1.axhline(
             structure["nearest_resistance"]["price"],
@@ -357,22 +459,19 @@ def draw_one_chart(
         ax2.axvspan(unconfirmed_from, df.index[-1], color="#888888", alpha=UNCONFIRMED_ALPHA)
 
     x_last = df.index[-1]
-    for col, color in (
-        (f"EMA{EMA_FAST}", EMA_COLOR),
-        (f"SMA{SMA_MID}", SMA50_COLOR),
-        (f"SMA{SMA_SLOW}", SMA200_COLOR),
-    ):
-        value = last[col]
-        if pd.isna(value):
+    for row in ma_rows:
+        if pd.isna(row["value"]):
             continue
-        role = classify_ma(price, float(value))
-        tag = "S" if role == "support" else "R"
+        tag = "S" if row["role"] == "support" else "R"
+        label = f"{row['label']} {tag} {format_price(float(row['value']))}"
+        if SHOW_DISTANCE_ON_LABELS and row["dist"] != "n/a":
+            label += f"  {row['dist']}"
         ax1.annotate(
-            f"{col} {tag} {format_price(float(value))}",
-            xy=(x_last, value),
+            label,
+            xy=(x_last, row["value"]),
             xytext=(8, 0),
             textcoords="offset points",
-            color=color,
+            color=row["color"],
             fontsize=8,
             va="center",
         )
@@ -407,7 +506,10 @@ def draw_one_chart(
         ax2.grid(True, alpha=0.3)
     add_window_date_formatters(ax2, days_back)
 
-    plt.tight_layout()
+    if ax3 is not None:
+        draw_ma_footer(ax3, df, structure)
+
+    fig.tight_layout()
 
     if not _backend_is_interactive():
         safe = coin_ticker.lower().replace(" ", "_")
