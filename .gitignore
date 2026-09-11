@@ -195,3 +195,6 @@ fabric.properties
 *.csv#
 
 *.png
+
+# Local downloaded market data caches
+src/spot_etf_data/
