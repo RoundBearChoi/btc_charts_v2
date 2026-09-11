@@ -33,14 +33,13 @@ try:
 except Exception:
     pass
 
-from pathlib import Path
-
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import pandas as pd
 
 import get_price_data_cryptocompare as price_data
+from coin_menu import get_coin_choice
 from indicators import add_ema, add_sma
 
 # ====================== CONFIG ======================
@@ -67,7 +66,6 @@ SUPPORT_COLOR = "#2ca02c"
 RESISTANCE_COLOR = "#d62728"
 UNCONFIRMED_ALPHA = 0
 
-COINS_CSV = Path(__file__).with_name("coins.csv")
 # ====================================================
 
 
@@ -116,61 +114,6 @@ def add_window_date_formatters(ax, days_back: int | None):
         ax.xaxis.set_minor_locator(mdates.WeekdayLocator(byweekday=mdates.MO))
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
     ax.tick_params(axis="x", which="major", labelsize=9)
-
-
-def load_coins(csv_path: Path = COINS_CSV) -> pd.DataFrame:
-    """Load the coin list. Row order is menu order."""
-    if not csv_path.exists():
-        raise FileNotFoundError(f"Coin list not found: {csv_path}")
-
-    coins = pd.read_csv(csv_path)
-    coins.columns = coins.columns.str.strip().str.lower()
-
-    required = {"name", "symbol"}
-    missing = required - set(coins.columns)
-    if missing:
-        raise ValueError(f"{csv_path} is missing columns: {sorted(missing)}")
-
-    coins["name"] = coins["name"].astype(str).str.strip()
-    coins["symbol"] = coins["symbol"].astype(str).str.strip().str.upper()
-    coins = coins.dropna(subset=["name", "symbol"])
-    coins = coins[(coins["name"] != "") & (coins["symbol"] != "")]
-
-    if coins.empty:
-        raise ValueError(f"{csv_path} has no usable name/symbol rows")
-
-    return coins.reset_index(drop=True)
-
-
-def get_coin_choice() -> list[tuple[str, str]]:
-    """Prompt 1..N from coins.csv, plus ALL as the last option."""
-    coins = load_coins()
-    n = len(coins)
-    all_idx = n + 1
-
-    print("\n" + "=" * 60)
-    print("Resistance / Support + Volume - Coin Selection")
-    print("=" * 60)
-    for i, row in coins.iterrows():
-        print(f"{i + 1}) {row['name']}")
-    print(f"{all_idx}) ALL")
-    print("=" * 60)
-
-    while True:
-        raw = input(f"\nEnter 1-{all_idx} (or ALL): ").strip()
-        if raw.lower() == "all" or (raw.isdigit() and int(raw) == all_idx):
-            chosen = [(row["name"], row["symbol"]) for _, row in coins.iterrows()]
-            labels = ", ".join(name for name, _ in chosen)
-            print(f"→ ALL ({labels})")
-            return chosen
-        if raw.isdigit():
-            idx = int(raw)
-            if 1 <= idx <= n:
-                row = coins.iloc[idx - 1]
-                name, symbol = row["name"], row["symbol"]
-                print(f"→ {name} ({symbol})")
-                return [(name, symbol)]
-        print(f"✘ Invalid. Enter a number from 1 to {all_idx}, or ALL.")
 
 
 def add_swing_points(df: pd.DataFrame, left: int = 8, right: int = 8) -> pd.DataFrame:
@@ -481,7 +424,7 @@ def draw_one_chart(
 
 
 def draw(days_back: int | None = DAYS_BACK, block_window: bool = BLOCK_WINDOW):
-    choices = get_coin_choice()
+    choices = get_coin_choice("Resistance / Support + Volume - Coin Selection")
     total = len(choices)
 
     for i, (coin_name, coin_ticker) in enumerate(choices, start=1):
