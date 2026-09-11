@@ -59,10 +59,10 @@ SWING_RIGHT = 8
 
 VOLUME_SMA_DAYS = 20
 
-FIGURE_SIZE = (14, 10.4)   # extra height reserved for the MA footer + gap
+FIGURE_SIZE = (14, 10.8)   # extra height reserved for the MA footer + gap
 SHOW_MA_FOOTER = True      # table under volume: value / role / distance
 SHOW_DISTANCE_ON_LABELS = True  # also append % distance to right-edge MA tags
-FOOTER_GAP = 0.06          # figure-fraction gap between volume and the MA table
+FOOTER_GAP = 0.11          # figure-fraction gap between volume and the MA table
 
 CLOSE_COLOR = "#1f77b4"
 EMA_COLOR = "#E15FC3"
@@ -521,7 +521,7 @@ def draw_one_chart(
         box2 = ax2.get_position()
         box3 = ax3.get_position()
         new_top = box2.y0 - FOOTER_GAP
-        new_bottom = max(0.03, new_top - box3.height)
+        new_bottom = max(0.02, new_top - box3.height)
         ax3.set_position([box3.x0, new_bottom, box3.width, new_top - new_bottom])
 
     if not _backend_is_interactive():
