@@ -193,23 +193,26 @@ def print_stats(df: pd.DataFrame, source: str):
     last7 = flows.tail(7).sum()
     last30 = flows.tail(30).sum()
     cumulative = flows.sum()
-    inflow_days = (flows > 0).sum()
-    outflow_days = (flows < 0).sum()
+    inflow_days = int((flows > 0).sum())
+    outflow_days = int((flows < 0).sum())
 
     print("=" * 64)
     print("US Spot Bitcoin ETF Flows")
     print("=" * 64)
     print(f"Source:          {source}")
     print(f"Period:          {df.index.min().date()} → {df.index.max().date()}")
-    print(f"Trading days:    {len(flows):,}  (in {inflow_days} / out {outflow_days} / flat {len(flows) - inflow_days - outflow_days})")
+    print(
+        f"Trading days:    {len(flows):,}  "
+        f"(in {inflow_days} / out {outflow_days} / "
+        f"flat {len(flows) - inflow_days - outflow_days})"
+    )
     print(f"Latest day:      {last_date}   {_usd_millions(last['net_flow_usd'])} M")
     print(f"Last 7 days:     {_usd_millions(last7)} M")
     print(f"Last 30 days:    {_usd_millions(last30)} M")
     print(f"Cumulative net:  {_usd_millions(cumulative)} M")
-    if pd.notna(last.get("aum_usd")):
-        print(f"Latest AUM:      ${_usd_millions(last['aum_usd']).replace('+', '')} B".replace(" M", ""))
-        # _usd_millions is in millions; print AUM in billions separately
-        print(f"Latest AUM:      ${last['aum_usd'] / 1_000_000_000:,.1f} B")
+    aum = last.get("aum_usd") if hasattr(last, "get") else last["aum_usd"] if "aum_usd" in last.index else None
+    if aum is not None and pd.notna(aum):
+        print(f"Latest AUM:      ${aum / 1_000_000_000:,.1f} B")
     print("=" * 64)
 
     fund_cols = [c for c in (f"flow_{t}" for t in FUND_ORDER) if c in df.columns]
