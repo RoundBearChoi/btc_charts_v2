@@ -26,6 +26,7 @@ python src/21_50_200_chart.py
 python src/ratio_between_coins.py
 python src/funding_rates_btc_binance.py
 python src/spot_etf_btc.py
+python src/resistance_and_support_btc.py
 ```
 
 Check that Tkinter imported:
@@ -79,6 +80,7 @@ src/
 ├── rsi_vs_halving.py                 # Monthly RSI colored by time-to-next-halving
 ├── interactive_classic_200_week_sma.py  # Interactive weekly SMA slider
 ├── usd_m2_vs_btc.py                  # BTC vs US M2 money supply (FRED)
+├── resistance_and_support_btc.py     # BTC MAs as live S/R + swing levels + volume
 │
 ├── funding_rates_btc_binance.py      # BTC Price + Funding Rate + Z-Score (Binance)
 ├── funding_rates_fartcoin_hype.py    # FARTCOIN Price + Funding Rate + Z-Score (Hyperliquid)
@@ -109,7 +111,8 @@ src/
 | `pi_bottom_top.py` | Dual-panel Pi Cycle indicators (Bottom: 471 SMA × factor + 150 EMA; Top: 350 SMA × 2 + 111 SMA). |
 | `rsi_vs_halving.py` | Monthly RSI line colored by months remaining until next Bitcoin halving. Includes cycle progress markers, halving vertical lines, and horizontal RSI levels. |
 | `interactive_classic_200_week_sma.py` | Interactive slider (3–250 weeks) for the classic weekly SMA. Uses Sunday weekly closes for accuracy. |
-| `usd_m2_vs_btc.py` | Two-panel comparison of monthly BTC close vs US M2 money supply (pulled live from FRED). |
+| `usd_m2_vs_btc.py` | Two-panel comparison of monthly BTC close vs US M2 money supply (FRED). |
+| `resistance_and_support_btc.py` | Two-panel BTC chart: price with EMA21/SMA50/SMA200 labeled as live support or resistance, latest confirmed swing high/low, and up/down volume. Prints the current levels in the terminal. |
 
 ### Funding Rate Charts
 
