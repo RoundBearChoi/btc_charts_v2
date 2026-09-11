@@ -436,7 +436,7 @@ def draw_one_chart(
     # Prior swing vs latest swing: shows whether the floor/ceiling moved
     if len(structure["last_highs"]) == 2:
         prev_h = structure["last_highs"][0]["price"]
-    ax1.axhline(prev_h, color=RESISTANCE_COLOR, linestyle=":", linewidth=0.9, alpha=0.35)
+        ax1.axhline(prev_h, color=RESISTANCE_COLOR, linestyle=":", linewidth=0.9, alpha=0.35)
     if structure["nearest_resistance"]:
         ax1.axhline(
             structure["nearest_resistance"]["price"],
