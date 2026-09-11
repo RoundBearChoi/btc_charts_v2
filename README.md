@@ -2,7 +2,7 @@
 
 Lightweight, highly configurable Python toolkit for Bitcoin & crypto technical analysis charts.
 
-Built around **CryptoCompare** historical price data (with smart incremental caching), plus Binance / Hyperliquid funding rates. Most charts support multi-coin selection (BTC, SOL, XMR, FARTCOIN, TROLL, or any custom ticker) and have a clear `CONFIG` section at the top for easy customization of windows, colors, date ranges, grid styling, etc.
+Built around **CryptoCompare** historical price data (with smart incremental caching), plus Binance / Hyperliquid funding rates and US spot Bitcoin ETF flows. Most charts support multi-coin selection (BTC, SOL, XMR, FARTCOIN, TROLL, or any custom ticker) and have a clear `CONFIG` section at the top for easy customization of windows, colors, date ranges, grid styling, etc.
 
 **Requires Python ≥ 3.10**
 
@@ -25,6 +25,7 @@ python src/zscore_chart.py
 python src/21_50_200_chart.py
 python src/ratio_between_coins.py
 python src/funding_rates_btc_binance.py
+python src/spot_etf_btc.py
 ```
 
 Check that Tkinter imported:
@@ -80,7 +81,8 @@ src/
 ├── usd_m2_vs_btc.py                  # BTC vs US M2 money supply (FRED)
 │
 ├── funding_rates_btc_binance.py      # BTC Price + Funding Rate + Z-Score (Binance)
-└── funding_rates_fartcoin_hype.py    # FARTCOIN Price + Funding Rate + Z-Score (Hyperliquid)
+├── funding_rates_fartcoin_hype.py    # FARTCOIN Price + Funding Rate + Z-Score (Hyperliquid)
+└── spot_etf_btc.py                   # BTC Price + US spot ETF daily/cumulative flows
 ```
 
 ---
@@ -116,6 +118,12 @@ src/
 | `funding_rates_btc_binance.py` | Three-panel: BTC Price (50/111 SMA) + Daily Funding Rate + Funding Z-Score. Data from Binance Futures. Local cache. |
 | `funding_rates_fartcoin_hype.py` | Same layout for FARTCOIN on Hyperliquid. |
 
+### ETF Flow Charts
+
+| Script | Description |
+|--------|-------------|
+| `spot_etf_btc.py` | Three-panel: BTC Price + daily US spot Bitcoin ETF net flows (USD, green/red bars) + cumulative net flow / AUM. Prints a recent per-fund table (IBIT, FBTC, GBTC, ARKB, …). Primary source is the TFTC open JSON dataset; BGeometrics is the fallback. Cache: `src/spot_etf_data/`. |
+
 ---
 
 ## Common Patterns
@@ -139,6 +147,7 @@ On a machine with Tkinter + a GUI backend (typically TkAgg), charts open in an i
 - **Multi-coin support**: `21_50_200_chart.py` and `ratio_between_coins.py` only offer coins listed in `src/coins.csv`. Other price charts still accept any CryptoCompare ticker (SOL, XMR, PEPE, DOGE, etc.).
 - **Ratio chart** is offline-only. Cache files follow `cryptocompare_historic_{symbol}_price.csv` for every `symbol` in `coins.csv` (for example `btc`, `eth`, `sol`, `xmr`, `fartcoin`, `troll`).
 - **Funding data** is cached separately (`binance_funding_data/`, `hyperliquid_fartcoin_funding_data/`).
+- **ETF flow data** is cached in `src/spot_etf_data/` and refreshes at most every 12 hours.
 - The `cryptocompare` package is **no longer used** — the downloader talks to the v2 API directly via `requests`.
 - All scripts are designed to be run from the repo root: `python src/<script>.py`
 
