@@ -65,7 +65,7 @@ SMA50_COLOR = "#2ca02c"
 SMA200_COLOR = "#C80C01"
 SUPPORT_COLOR = "#2ca02c"
 RESISTANCE_COLOR = "#d62728"
-UNCONFIRMED_ALPHA = 0.12
+UNCONFIRMED_ALPHA = 0
 
 COINS_CSV = Path(__file__).with_name("coins.csv")
 # ====================================================
