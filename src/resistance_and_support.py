@@ -126,7 +126,6 @@ def add_window_date_formatters(ax, days_back: int | None):
         ax.xaxis.set_minor_locator(mdates.MonthLocator())
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
     elif days_back > 240:
-        # ~1 year: one labeled date per month, e.g. Sep 1st 2026
         ax.xaxis.set_major_locator(mdates.MonthLocator())
         ax.xaxis.set_minor_locator(mdates.MonthLocator())
         ax.xaxis.set_major_formatter(ticker.FuncFormatter(format_axis_date))
@@ -340,4 +339,191 @@ def draw_ma_footer(ax, df: pd.DataFrame, structure: dict):
     cell_text = [
         [row["label"], format_price(row["value"]), row["role"], row["dist"]]
         for row in rows
-    ]n
+    ]
+    table = ax.table(
+        cellText=cell_text,
+        colLabels=["MA", "Value", "Role", "Distance"],
+        loc="upper center",
+        cellLoc="center",
+        colLoc="center",
+    )
+    table.auto_set_font_size(False)
+    table.set_fontsize(9)
+    table.scale(1.0, 1.35)
+
+    header_bg = "#263549"
+    support_bg = "#e8f6e8"
+    resist_bg = "#fdecea"
+    na_bg = "#f4f4f4"
+
+    for col in range(4):
+        cell = table[0, col]
+        cell.set_facecolor(header_bg)
+        cell.set_text_props(color="white", weight="bold")
+        cell.set_edgecolor("#ffffff")
+
+    for i, row in enumerate(rows, start=1):
+        if row["role"] == "support":
+            role_bg = support_bg
+            role_fg = SUPPORT_COLOR
+        elif row["role"] == "resistance":
+            role_bg = resist_bg
+            role_fg = RESISTANCE_COLOR
+        else:
+            role_bg = na_bg
+            role_fg = "#555555"
+
+        table[i, 0].set_text_props(color=row["color"], weight="bold")
+        table[i, 2].set_facecolor(role_bg)
+        table[i, 2].set_text_props(color=role_fg, weight="bold")
+        table[i, 3].set_facecolor(role_bg)
+        table[i, 3].set_text_props(color=role_fg, weight="bold")
+        for col in range(4):
+            table[i, col].set_edgecolor("#dddddd")
+
+
+def draw_one_chart(
+    coin_name: str,
+    coin_ticker: str,
+    *,
+    days_back: int | None = DAYS_BACK,
+    block_window: bool = BLOCK_WINDOW,
+    close_after: bool = True,
+):
+    print(f"\nLoading {coin_name} ({coin_ticker}) price data...")
+    df = price_data.get_price_data(coin=coin_ticker).copy()
+    df = naive_index(df).sort_index()
+
+    required = {"open", "high", "low", "close", "volumeto"}
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f"{coin_ticker} data is missing columns: {sorted(missing)}")
+
+    df = add_ema(df, EMA_FAST)
+    df = add_sma(df, SMA_MID)
+    df = add_sma(df, SMA_SLOW)
+    df = add_swing_points(df, left=SWING_LEFT, right=SWING_RIGHT)
+    df["vol_sma"] = df["volumeto"].rolling(window=VOLUME_SMA_DAYS).mean()
+    df["up_day"] = df["close"] >= df["open"]
+
+    if days_back:
+        df = df.iloc[-days_back:]
+
+    structure = structure_from_swings(df)
+    print_levels(df, structure, coin_name, coin_ticker)
+
+    last = df.iloc[-1]
+    price = float(last["close"])
+    ma_rows = ma_snapshot_rows(df)
+
+    if SHOW_MA_FOOTER:
+        fig = plt.figure(figsize=FIGURE_SIZE)
+        gs = fig.add_gridspec(3, 1, height_ratios=[3.2, 1.0, 0.78], hspace=0.18)
+        ax1 = fig.add_subplot(gs[0])
+        ax2 = fig.add_subplot(gs[1], sharex=ax1)
+        ax3 = fig.add_subplot(gs[2])
+        plt.setp(ax1.get_xticklabels(), visible=False)
+    else:
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=FIGURE_SIZE, gridspec_kw={"height_ratios": [3.2, 1]}, sharex=True)
+        ax3 = None
+    plt.style.use("fast")
+
+    ax1.plot(df.index, df["close"], color=CLOSE_COLOR, linewidth=1.25, label=f"{coin_name} Close")
+    ax1.plot(df.index, df[f"EMA{EMA_FAST}"], color=EMA_COLOR, linewidth=1.2, label=f"EMA{EMA_FAST}")
+    ax1.plot(df.index, df[f"SMA{SMA_MID}"], color=SMA50_COLOR, linewidth=1.2, label=f"SMA{SMA_MID}")
+    ax1.plot(df.index, df[f"SMA{SMA_SLOW}"], color=SMA200_COLOR, linewidth=1.4, linestyle="--", label=f"SMA{SMA_SLOW}")
+    if LOG_SCALE:
+        ax1.set_yscale("log")
+
+    sh = df[df["swing_high"]]
+    sl = df[df["swing_low"]]
+    ax1.scatter(sh.index, sh["high"], color=RESISTANCE_COLOR, s=18, zorder=5, label="Swing high")
+    ax1.scatter(sl.index, sl["low"], color=SUPPORT_COLOR, s=18, zorder=5, label="Swing low")
+
+    if len(structure["last_highs"]) == 2:
+        ax1.axhline(structure["last_highs"][0]["price"], color=RESISTANCE_COLOR, linestyle=":", linewidth=0.9, alpha=0.35)
+    if structure["nearest_resistance"]:
+        ax1.axhline(structure["nearest_resistance"]["price"], color=RESISTANCE_COLOR, linestyle=":", linewidth=1.2, alpha=0.9, label=f"Swing R {format_price(structure['nearest_resistance']['price'])}")
+    if len(structure["last_lows"]) == 2:
+        ax1.axhline(structure["last_lows"][0]["price"], color=SUPPORT_COLOR, linestyle=":", linewidth=0.9, alpha=0.35)
+    if structure["nearest_support"]:
+        ax1.axhline(structure["nearest_support"]["price"], color=SUPPORT_COLOR, linestyle=":", linewidth=1.2, alpha=0.9, label=f"Swing S {format_price(structure['nearest_support']['price'])}")
+
+    if len(df) > SWING_RIGHT:
+        unconfirmed_from = df.index[-SWING_RIGHT]
+        ax1.axvspan(unconfirmed_from, df.index[-1], color="#888888", alpha=UNCONFIRMED_ALPHA)
+        ax2.axvspan(unconfirmed_from, df.index[-1], color="#888888", alpha=UNCONFIRMED_ALPHA)
+
+    x_last = df.index[-1]
+    for row in ma_rows:
+        if pd.isna(row["value"]):
+            continue
+        tag = "S" if row["role"] == "support" else "R"
+        label = f"{row['label']} {tag} {format_price(float(row['value']))}"
+        if SHOW_DISTANCE_ON_LABELS and row["dist"] != "n/a":
+            label += f"  {row['dist']}"
+        ax1.annotate(label, xy=(x_last, row["value"]), xytext=(8, 0), textcoords="offset points", color=row["color"], fontsize=8, va="center")
+
+    title = f"{coin_name} • S/R + swings • {structure['label']}"
+    if days_back:
+        title += f" — last {days_back} days"
+    if LOG_SCALE:
+        title += " (LOG)"
+    ax1.set_title(title, fontsize=13, pad=12)
+    ax1.set_ylabel("Price (USD)")
+    ax1.yaxis.set_major_formatter(ticker.FuncFormatter(price_axis_formatter))
+    ax1.legend(loc="upper left", fontsize=8, ncol=2, framealpha=0.92)
+    if SHOW_GRID:
+        ax1.grid(True, alpha=0.3)
+
+    vol_colors = ["#2ca02c" if up else "#d62728" for up in df["up_day"]]
+    ax2.bar(df.index, df["volumeto"], color=vol_colors, width=0.9, alpha=0.75, label="Volume")
+    ax2.plot(df.index, df["vol_sma"], color="#263549", linewidth=1.4, label=f"{VOLUME_SMA_DAYS}d vol SMA")
+    ax2.set_ylabel("Volume (USD)")
+    ax2.set_xlabel("Date")
+    ax2.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, _p: f"${x/1e9:.1f}B" if x >= 1e9 else f"${x/1e6:.0f}M" if x >= 1e6 else f"${x:,.0f}"))
+    ax2.legend(loc="upper left", fontsize=8)
+    if SHOW_GRID:
+        ax2.grid(True, alpha=0.3)
+    add_window_date_formatters(ax2, days_back)
+
+    if ax3 is not None:
+        draw_ma_footer(ax3, df, structure)
+
+    fig.tight_layout()
+    if SHOW_MA_FOOTER:
+        box2 = ax2.get_position()
+        box3 = ax3.get_position()
+        new_top = box2.y0 - FOOTER_GAP
+        new_bottom = max(0.02, new_top - box3.height)
+        ax3.set_position([box3.x0, new_bottom, box3.width, new_top - new_bottom])
+
+    if not _backend_is_interactive():
+        safe = coin_ticker.lower().replace(" ", "_")
+        out = f"{safe}_resistance_and_support.png"
+        plt.savefig(out, dpi=150, bbox_inches="tight", facecolor="white")
+        print(f"Chart saved to: {out}")
+        plt.close(fig)
+        return
+
+    print(f"Using interactive backend: {matplotlib.get_backend()}")
+    plt.show(block=block_window)
+    if close_after and block_window:
+        plt.close(fig)
+
+
+def draw(days_back: int | None = DAYS_BACK, block_window: bool = BLOCK_WINDOW):
+    choices = get_coin_choice("Resistance / Support + Volume - Coin Selection")
+    total = len(choices)
+    for i, (coin_name, coin_ticker) in enumerate(choices, start=1):
+        is_last = i == total
+        if total > 1:
+            print(f"\n[{i}/{total}] {coin_name}")
+        per_coin_block = block_window if total == 1 else True
+        draw_one_chart(coin_name, coin_ticker, days_back=days_back, block_window=per_coin_block, close_after=True)
+        if is_last and total > 1:
+            print(f"\nDone. Stopped after last coin ({coin_name}).")
+
+
+if __name__ == "__main__":
+    draw()
