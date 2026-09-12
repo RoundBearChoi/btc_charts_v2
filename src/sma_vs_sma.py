@@ -14,7 +14,7 @@ BLOCK_WINDOW = True          # False = script continues immediately (non-blockin
 
 RSI_WINDOW = 14              # Standard RSI period; try 7, 21, 28 for different sensitivity
 VOLUME_SMA_DAYS = 15         # SMA on volume bars; set 0 to disable
-DAYS_BACK = None             # e.g. 365*2 for last 2 years; None = full history
+DAYS_BACK = 365 * 2          # None = full history
 FIGURE_SIZE = (14, 10)
 SHOW_GRID = True
 
