@@ -71,8 +71,13 @@ VOLUME_SMA_DAYS = 15
 VOLUME_SMA_COLOR = "#263549"
 CLOUD_UP_COLOR = "#00D118"
 CLOUD_DOWN_COLOR = "#C80C01"
-GOLDEN_CROSS_COLOR = "#00D118"
-DEATH_CROSS_COLOR = "#C80C01"
+
+# Cross markers — same size for both pairs; different palettes so they don't collide
+CROSS_MARKER_SIZE = 36
+FAST_GOLDEN_CROSS_COLOR = "#00D118"   # 21/50 golden
+FAST_DEATH_CROSS_COLOR = "#C80C01"    # 21/50 death
+SLOW_GOLDEN_CROSS_COLOR = "#F5C518"   # 50/200 golden (gold)
+SLOW_DEATH_CROSS_COLOR = "#5B6CFF"    # 50/200 death (indigo)
 
 # Headless PNG output (repo-root/output when run from repo root)
 OUTPUT_DIR = Path(__file__).resolve().parents[1] / "output"
@@ -150,7 +155,17 @@ def print_snapshot(df: pd.DataFrame, coin_name: str, coin_ticker: str, rsi_windo
     print("=" * 64 + "\n")
 
 
-def _mark_crosses(ax, df: pd.DataFrame, fast_col: str, slow_col: str, *, size: int, label_prefix: str):
+def _mark_crosses(
+    ax,
+    df: pd.DataFrame,
+    fast_col: str,
+    slow_col: str,
+    *,
+    size: int,
+    golden_color: str,
+    death_color: str,
+    label_prefix: str,
+):
     prev_fast = df[fast_col].shift(1)
     prev_slow = df[slow_col].shift(1)
     golden = (df[fast_col] > df[slow_col]) & (prev_fast <= prev_slow)
@@ -160,13 +175,13 @@ def _mark_crosses(ax, df: pd.DataFrame, fast_col: str, slow_col: str, *, size: i
     if not g.empty:
         ax.scatter(
             g.index, g[fast_col],
-            color=GOLDEN_CROSS_COLOR, s=size, marker="^", zorder=6,
+            color=golden_color, s=size, marker="^", zorder=6,
             label=f"{label_prefix} golden",
         )
     if not d.empty:
         ax.scatter(
             d.index, d[fast_col],
-            color=DEATH_CROSS_COLOR, s=size, marker="v", zorder=6,
+            color=death_color, s=size, marker="v", zorder=6,
             label=f"{label_prefix} death",
         )
 
@@ -246,8 +261,20 @@ def draw_one_chart(
     )
 
     if SHOW_CROSSES:
-        _mark_crosses(ax1, data_frame, mid_col, slow_col, size=36, label_prefix=f"{SMA_MID}/{SMA_SLOW}")
-        _mark_crosses(ax1, data_frame, ema_col, mid_col, size=18, label_prefix=f"{EMA_FAST}/{SMA_MID}")
+        _mark_crosses(
+            ax1, data_frame, mid_col, slow_col,
+            size=CROSS_MARKER_SIZE,
+            golden_color=SLOW_GOLDEN_CROSS_COLOR,
+            death_color=SLOW_DEATH_CROSS_COLOR,
+            label_prefix=f"{SMA_MID}/{SMA_SLOW}",
+        )
+        _mark_crosses(
+            ax1, data_frame, ema_col, mid_col,
+            size=CROSS_MARKER_SIZE,
+            golden_color=FAST_GOLDEN_CROSS_COLOR,
+            death_color=FAST_DEATH_CROSS_COLOR,
+            label_prefix=f"{EMA_FAST}/{SMA_MID}",
+        )
 
     last = data_frame.iloc[-1]
     price = float(last["close"])
