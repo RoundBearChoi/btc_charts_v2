@@ -490,17 +490,17 @@ def draw_one_chart(
     if SHOW_GRID:
         ax1.grid(True, alpha=0.3)
     add_window_date_formatters(ax1, days_back)
-    plt.setp(ax1.get_xticklabels(), visible=False)
-    ax1.tick_params(axis="x", labelbottom=False)
+    ax1.tick_params(axis="x", labelbottom=True)
 
     if ax_roles is not None:
         draw_ma_rolesheet(ax_roles, df, structure)
 
     draw_rsi(ax_rsi, df)
     add_window_date_formatters(ax_rsi, days_back)
-    ax_rsi.tick_params(axis="x", labelbottom=True)
+    plt.setp(ax_rsi.get_xticklabels(), visible=False)
+    ax_rsi.tick_params(axis="x", labelbottom=False)
 
-    fig.subplots_adjust(left=0.07, right=0.96, top=0.93, bottom=0.10)
+    fig.subplots_adjust(left=0.07, right=0.96, top=0.93, bottom=0.06)
 
     if not _backend_is_interactive():
         safe = coin_ticker.lower().replace(" ", "_")
