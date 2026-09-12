@@ -29,7 +29,7 @@ from plotting_utils import (
 # CONFIGURATION - Edit these values as needed
 # ==================================================
 LOG_SCALE = False
-DAYS_BACK = 360 * 2          # Set None for full history
+DAYS_BACK = 365 * 5          # Set None for full history
 BLOCK_WINDOW = True          # False = script continues immediately
 SHOW_GRID = True
 
