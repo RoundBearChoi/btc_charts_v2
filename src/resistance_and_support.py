@@ -477,12 +477,12 @@ def draw_one_chart(
     ax2.bar(df.index, df["volumeto"], color=vol_colors, width=0.9, alpha=0.75, label="Volume")
     ax2.plot(df.index, df["vol_sma"], color="#263549", linewidth=1.4, label=f"{VOLUME_SMA_DAYS}d vol SMA")
     ax2.set_ylabel("Volume (USD)")
-    ax2.set_xlabel("Date")
     ax2.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, _p: f"${x/1e9:.1f}B" if x >= 1e9 else f"${x/1e6:.0f}M" if x >= 1e6 else f"${x:,.0f}"))
     ax2.legend(loc="upper left", fontsize=8)
     if SHOW_GRID:
         ax2.grid(True, alpha=0.3)
-    add_window_date_formatters(ax2, days_back)
+    ax2.tick_params(axis="x", labelbottom=False)
+    plt.setp(ax2.get_xticklabels(), visible=False)
 
     if ax3 is not None:
         draw_ma_footer(ax3, df, structure)
