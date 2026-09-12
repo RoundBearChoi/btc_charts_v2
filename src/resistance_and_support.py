@@ -66,8 +66,12 @@ SHOW_RSI_ZONES = True
 FIGURE_SIZE = (14, 10.8)   # extra height reserved for the MA role sheet
 SHOW_MA_FOOTER = True      # table under price: value / role / distance
 SHOW_DISTANCE_ON_LABELS = True  # also append % distance to right-edge MA tags
-PANEL_HSPACE = 0.2        # gap between price / role sheet / RSI
 HEIGHT_RATIOS = (3.4, 0.78, 1.05)  # price, role sheet, RSI
+# Gaps are GridSpec row weights in the same units as HEIGHT_RATIOS.
+# Matplotlib's single hspace cannot differ per pair of panes, so empty
+# spacer rows are used instead.
+SPACE_PRICE_TO_ROLES = 0.50    # wider gap under the price pane
+SPACE_ROLES_TO_RSI = 0.10      # tighter gap above RSI
 
 CLOSE_COLOR = "#1f77b4"
 EMA_COLOR = "#E15FC3"
@@ -416,20 +420,31 @@ def draw_one_chart(
 
     fig = plt.figure(figsize=FIGURE_SIZE)
     plt.style.use("fast")
+    price_h, roles_h, rsi_h = HEIGHT_RATIOS
     if SHOW_MA_FOOTER:
-        gs = fig.add_gridspec(3, 1, height_ratios=list(HEIGHT_RATIOS), hspace=PANEL_HSPACE)
+        gs = fig.add_gridspec(
+            5, 1,
+            height_ratios=[
+                price_h,
+                SPACE_PRICE_TO_ROLES,
+                roles_h,
+                SPACE_ROLES_TO_RSI,
+                rsi_h,
+            ],
+            hspace=0.0,
+        )
         ax1 = fig.add_subplot(gs[0])
-        ax_roles = fig.add_subplot(gs[1])
-        ax_rsi = fig.add_subplot(gs[2], sharex=ax1)
+        ax_roles = fig.add_subplot(gs[2])
+        ax_rsi = fig.add_subplot(gs[4], sharex=ax1)
     else:
         gs = fig.add_gridspec(
-            2, 1,
-            height_ratios=[HEIGHT_RATIOS[0], HEIGHT_RATIOS[2]],
-            hspace=PANEL_HSPACE,
+            3, 1,
+            height_ratios=[price_h, SPACE_PRICE_TO_ROLES, rsi_h],
+            hspace=0.0,
         )
         ax1 = fig.add_subplot(gs[0])
         ax_roles = None
-        ax_rsi = fig.add_subplot(gs[1], sharex=ax1)
+        ax_rsi = fig.add_subplot(gs[2], sharex=ax1)
 
     ax1.plot(df.index, df["close"], color=CLOSE_COLOR, linewidth=1.25, label=f"{coin_name} Close")
     ax1.plot(df.index, df[f"EMA{EMA_FAST}"], color=EMA_COLOR, linewidth=1.2, label=f"EMA{EMA_FAST}")
