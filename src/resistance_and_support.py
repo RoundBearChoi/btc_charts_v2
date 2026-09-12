@@ -66,7 +66,7 @@ SHOW_RSI_ZONES = True
 FIGURE_SIZE = (14, 10.8)   # extra height reserved for the MA role sheet
 SHOW_MA_FOOTER = True      # table under price: value / role / distance
 SHOW_DISTANCE_ON_LABELS = True  # also append % distance to right-edge MA tags
-PANEL_HSPACE = 0.38        # gap between price / role sheet / RSI
+PANEL_HSPACE = 0.2        # gap between price / role sheet / RSI
 HEIGHT_RATIOS = (3.4, 0.78, 1.05)  # price, role sheet, RSI
 
 CLOSE_COLOR = "#1f77b4"
