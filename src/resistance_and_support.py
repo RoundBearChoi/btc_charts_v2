@@ -70,7 +70,7 @@ HEIGHT_RATIOS = (3.4, 0.78, 1.05)  # price, role sheet, RSI
 # Gaps are GridSpec row weights in the same units as HEIGHT_RATIOS.
 # Matplotlib's single hspace cannot differ per pair of panes, so empty
 # spacer rows are used instead.
-SPACE_PRICE_TO_ROLES = 0.50    # wider gap under the price pane
+SPACE_PRICE_TO_ROLES = 0.70    # wider gap under the price pane
 SPACE_ROLES_TO_RSI = 0.10      # tighter gap above RSI
 
 CLOSE_COLOR = "#1f77b4"
