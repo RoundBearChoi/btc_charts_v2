@@ -120,20 +120,16 @@ def format_axis_date(x, _p=None) -> str:
 
 
 def add_window_date_formatters(ax, days_back: int | None):
-    """Readable calendar dates on the x-axis."""
+    """Readable calendar dates on the 1st and 15th of each month."""
     if days_back is None or days_back > 900:
         ax.xaxis.set_major_locator(mdates.YearLocator())
-        ax.xaxis.set_minor_locator(mdates.MonthLocator())
+        ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonthday=[1, 15]))
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
-    elif days_back > 240:
-        ax.xaxis.set_major_locator(mdates.MonthLocator())
+    else:
+        ax.xaxis.set_major_locator(mdates.MonthLocator(bymonthday=[1, 15]))
         ax.xaxis.set_minor_locator(mdates.MonthLocator())
         ax.xaxis.set_major_formatter(ticker.FuncFormatter(format_axis_date))
-    else:
-        ax.xaxis.set_major_locator(mdates.MonthLocator())
-        ax.xaxis.set_minor_locator(mdates.WeekdayLocator(byweekday=mdates.MO))
-        ax.xaxis.set_major_formatter(ticker.FuncFormatter(format_axis_date))
-    ax.tick_params(axis="x", which="major", labelsize=9, rotation=30)
+    ax.tick_params(axis="x", which="major", labelsize=8, rotation=30)
     for label in ax.get_xticklabels():
         label.set_horizontalalignment("right")
 
@@ -418,11 +414,10 @@ def draw_one_chart(
 
     if SHOW_MA_FOOTER:
         fig = plt.figure(figsize=FIGURE_SIZE)
-        gs = fig.add_gridspec(3, 1, height_ratios=[3.2, 1.0, 0.78], hspace=0.18)
+        gs = fig.add_gridspec(3, 1, height_ratios=[3.2, 1.0, 0.78], hspace=0.32)
         ax1 = fig.add_subplot(gs[0])
         ax2 = fig.add_subplot(gs[1], sharex=ax1)
         ax3 = fig.add_subplot(gs[2])
-        plt.setp(ax1.get_xticklabels(), visible=False)
     else:
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=FIGURE_SIZE, gridspec_kw={"height_ratios": [3.2, 1]}, sharex=True)
         ax3 = None
@@ -475,6 +470,8 @@ def draw_one_chart(
     ax1.legend(loc="upper left", fontsize=8, ncol=2, framealpha=0.92)
     if SHOW_GRID:
         ax1.grid(True, alpha=0.3)
+    add_window_date_formatters(ax1, days_back)
+    ax1.tick_params(axis="x", labelbottom=True)
 
     vol_colors = ["#2ca02c" if up else "#d62728" for up in df["up_day"]]
     ax2.bar(df.index, df["volumeto"], color=vol_colors, width=0.9, alpha=0.75, label="Volume")
