@@ -405,6 +405,11 @@ def draw_one_chart(
     ax1.scatter(sh.index, sh["high"], color=RESISTANCE_COLOR, s=18, zorder=5, label="Swing high")
     ax1.scatter(sl.index, sl["low"], color=SUPPORT_COLOR, s=18, zorder=5, label="Swing low")
 
+    if structure["last_highs"]:
+        ax1.axhline(structure["last_highs"][-1]["price"], color=RESISTANCE_COLOR, linestyle=":", linewidth=1.2, alpha=0.9)
+    if structure["last_lows"]:
+        ax1.axhline(structure["last_lows"][-1]["price"], color=SUPPORT_COLOR, linestyle=":", linewidth=1.2, alpha=0.9)
+
     if len(df) > SWING_RIGHT:
         unconfirmed_from = df.index[-SWING_RIGHT]
         ax1.axvspan(unconfirmed_from, df.index[-1], color="#888888", alpha=UNCONFIRMED_ALPHA)
