@@ -488,7 +488,7 @@ def draw_one_chart(
     if ax3 is not None:
         draw_ma_footer(ax3, df, structure)
 
-    fig.tight_layout()
+    # fig.tight_layout()
     box1 = ax1.get_position()
     box2 = ax2.get_position()
     vol_top = box1.y0 - PRICE_VOLUME_GAP
