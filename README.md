@@ -88,7 +88,7 @@ src/
 ├── interactive_classic_200_week_sma.py  # Interactive weekly SMA slider
 ├── usd_m2_vs_btc.py                  # BTC vs US M2 money supply (FRED)
 ├── m2_fair_value_btc.py              # BTC vs rolling US-M2 implied fair value
-├── resistance_and_support.py         # MAs as live S/R + swing levels + volume
+├── resistance_and_support.py         # MAs as live S/R + swing levels + RSI
 │
 ├── funding_rates_btc_binance.py      # BTC Price + Funding Rate + Z-Score (Binance)
 ├── funding_rates_fartcoin_hype.py    # FARTCOIN Price + Funding Rate + Z-Score (Hyperliquid)
@@ -122,7 +122,7 @@ src/
 | `interactive_classic_200_week_sma.py` | Interactive slider (3–250 weeks) for the classic weekly SMA. Uses Sunday weekly closes for accuracy. |
 | `usd_m2_vs_btc.py` | Two-panel comparison of monthly BTC close vs US M2 money supply (FRED). Raw levels — the long-term “money stock vs price” view. |
 | `m2_fair_value_btc.py` | Companion to `usd_m2_vs_btc.py`. Rolling 48-month log(BTC) ~ log(M2) fair value on a log price axis, plus residual z-score. Prints spot / implied / gap. Fit uses prior months only (no look-ahead). US M2SL, not global M2. Headless runs save `output/m2_fair_value_btc.png`. |
-| `resistance_and_support.py` | Two-panel chart: price with EMA21/SMA50/SMA200 labeled as live support or resistance, latest confirmed swing high/low, and up/down volume. Prints HH/HL/LH/LL structure, SMA200 held/lost/retested, and the invalidation level. Same `coins.csv` menu as `21_50_200_chart.py`. |
+| `resistance_and_support.py` | Price + MA role sheet + RSI(14): EMA21/SMA50/SMA200 labeled as live support or resistance, confirmed swing high/low, and a compact value/role/distance table under price. Prints HH/HL/LH/LL structure and current RSI. Same `coins.csv` menu as `21_50_200_chart.py`. Volume lives on `21_50_200_chart.py` / `sma_vs_sma.py`. |
 
 ### Funding Rate Charts
 
@@ -150,7 +150,7 @@ Almost every chart script follows the same structure:
 
 This makes it very easy to tweak look-and-feel or analysis parameters without touching the plotting logic.
 
-On a machine with Tkinter + a GUI backend (typically TkAgg), charts open in an interactive window. On headless / SSH sessions, or if Tkinter is missing, `21_50_200_chart.py` and `m2_fair_value_btc.py` save a PNG under `output/` instead of calling `plt.show()`.
+On a machine with Tkinter + a GUI backend (typically TkAgg), charts open in an interactive window. On headless / SSH sessions, or if Tkinter is missing, `21_50_200_chart.py` and `m2_fair_value_btc.py` save a PNG instead of calling `plt.show()`.
 
 ---
 
