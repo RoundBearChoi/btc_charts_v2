@@ -66,6 +66,8 @@ SHOW_RSI_ZONES = True
 FIGURE_SIZE = (14, 10.8)   # extra height reserved for the MA role sheet
 SHOW_MA_FOOTER = True      # table under price: value / role / distance
 SHOW_DISTANCE_ON_LABELS = True  # also append % distance to right-edge MA tags
+PANEL_HSPACE = 0.38        # gap between price / role sheet / RSI
+HEIGHT_RATIOS = (3.4, 0.78, 1.05)  # price, role sheet, RSI
 
 CLOSE_COLOR = "#1f77b4"
 EMA_COLOR = "#E15FC3"
@@ -415,12 +417,16 @@ def draw_one_chart(
     fig = plt.figure(figsize=FIGURE_SIZE)
     plt.style.use("fast")
     if SHOW_MA_FOOTER:
-        gs = fig.add_gridspec(3, 1, height_ratios=[3.4, 0.78, 1.05], hspace=0.38)
+        gs = fig.add_gridspec(3, 1, height_ratios=list(HEIGHT_RATIOS), hspace=PANEL_HSPACE)
         ax1 = fig.add_subplot(gs[0])
         ax_roles = fig.add_subplot(gs[1])
         ax_rsi = fig.add_subplot(gs[2], sharex=ax1)
     else:
-        gs = fig.add_gridspec(2, 1, height_ratios=[3.4, 1.05], hspace=0.22)
+        gs = fig.add_gridspec(
+            2, 1,
+            height_ratios=[HEIGHT_RATIOS[0], HEIGHT_RATIOS[2]],
+            hspace=PANEL_HSPACE,
+        )
         ax1 = fig.add_subplot(gs[0])
         ax_roles = None
         ax_rsi = fig.add_subplot(gs[1], sharex=ax1)
