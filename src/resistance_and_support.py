@@ -294,13 +294,7 @@ def print_levels(df: pd.DataFrame, structure: dict, coin_name: str, coin_ticker:
             print(f"  {tag:<7} {format_price(row['price'])}  ({row['date'].date()})")
     else:
         print("  none")
-
-    print()
-    print("MA rule: above the average = support, below = resistance.")
-    print("Swing rule: confirmed pivot only after SWING_RIGHT extra bars.")
-    print("Structure uses the last two confirmed highs and last two lows.")
-    print("Distance to each MA is on the role sheet / right-edge labels.")
-    print("=" * 64 + "\n")
+    print("")
 
 
 def draw_ma_rolesheet(ax, df: pd.DataFrame, structure: dict):
