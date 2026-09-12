@@ -238,24 +238,12 @@ def structure_from_swings(df: pd.DataFrame) -> dict:
         label = "not enough confirmed swings"
 
     price = float(df.iloc[-1]["close"])
-    res_above = highs[highs["high"] > price]
-    sup_below = lows[lows["low"] < price]
-    nearest_res = None
-    nearest_sup = None
-    if not res_above.empty:
-        row = res_above.iloc[-1]
-        nearest_res = {"date": row.name, "price": float(row["high"])}
-    if not sup_below.empty:
-        row = sup_below.iloc[-1]
-        nearest_sup = {"date": row.name, "price": float(row["low"])}
 
     return {
         "price": price,
         "label": label,
         "last_highs": last_highs,
         "last_lows": last_lows,
-        "nearest_resistance": nearest_res,
-        "nearest_support": nearest_sup,
     }
 
 
@@ -289,25 +277,6 @@ def print_levels(df: pd.DataFrame, structure: dict, coin_name: str, coin_ticker:
             print(f"  {tag:<7} {format_price(row['price'])}  ({row['date'].date()})")
     else:
         print("  none")
-
-    print()
-    if structure["nearest_resistance"]:
-        r = structure["nearest_resistance"]
-        print(
-            f"Nearest swing R above price: {format_price(r['price'])}  "
-            f"({r['date'].date()})"
-        )
-    else:
-        print("Nearest swing R above price: none in this window")
-
-    if structure["nearest_support"]:
-        s = structure["nearest_support"]
-        print(
-            f"Nearest swing S below price: {format_price(s['price'])}  "
-            f"({s['date'].date()})"
-        )
-    else:
-        print("Nearest swing S below price: none in this window")
 
     print()
     print("MA rule: above the average = support, below = resistance.")
@@ -435,15 +404,6 @@ def draw_one_chart(
     sl = df[df["swing_low"]]
     ax1.scatter(sh.index, sh["high"], color=RESISTANCE_COLOR, s=18, zorder=5, label="Swing high")
     ax1.scatter(sl.index, sl["low"], color=SUPPORT_COLOR, s=18, zorder=5, label="Swing low")
-
-    if len(structure["last_highs"]) == 2:
-        ax1.axhline(structure["last_highs"][0]["price"], color=RESISTANCE_COLOR, linestyle=":", linewidth=0.9, alpha=0.35)
-    if structure["nearest_resistance"]:
-        ax1.axhline(structure["nearest_resistance"]["price"], color=RESISTANCE_COLOR, linestyle=":", linewidth=1.2, alpha=0.9, label=f"Swing R {format_price(structure['nearest_resistance']['price'])}")
-    if len(structure["last_lows"]) == 2:
-        ax1.axhline(structure["last_lows"][0]["price"], color=SUPPORT_COLOR, linestyle=":", linewidth=0.9, alpha=0.35)
-    if structure["nearest_support"]:
-        ax1.axhline(structure["nearest_support"]["price"], color=SUPPORT_COLOR, linestyle=":", linewidth=1.2, alpha=0.9, label=f"Swing S {format_price(structure['nearest_support']['price'])}")
 
     if len(df) > SWING_RIGHT:
         unconfirmed_from = df.index[-SWING_RIGHT]
