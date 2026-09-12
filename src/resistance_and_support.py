@@ -2,12 +2,13 @@
 """
 resistance_and_support.py
 
-Two-panel chart for a coin from src/coins.csv, plus a compact MA snapshot
-under the volume pane:
+Price + MA role sheet + RSI(14) for a coin from src/coins.csv:
   1. Price + EMA21 / SMA50 / SMA200 as *dynamic* support or resistance
      plus recent swing highs / lows as *static* levels
-  2. Volume (up-day / down-day bars) + volume SMA
-  3. Footer table: MA value, support/resistance role, % distance from close
+  2. Role sheet: MA value, support/resistance role, % distance from close
+  3. RSI(14) with the same 70 / 50 / 30 treatment as 21_50_200_chart.py
+
+Volume lives on the 21/50/200 and SMA-vs-SMA scripts, not here.
 
 Rule used for moving averages:
   price above the MA  -> that MA is treated as support
@@ -42,7 +43,7 @@ import pandas as pd
 
 import get_price_data_cryptocompare as price_data
 from coin_menu import get_coin_choice
-from indicators import add_ema, add_sma
+from indicators import add_ema, add_rsi, add_sma
 
 # ====================== CONFIG ======================
 DAYS_BACK = 360            # chart window; None = full history
@@ -57,13 +58,14 @@ SMA_SLOW = 200
 SWING_LEFT = 8             # bars on each side to confirm a pivot
 SWING_RIGHT = 8
 
-VOLUME_SMA_DAYS = 20
+RSI_WINDOW = 14
+RSI_OVERBOUGHT = 70
+RSI_OVERSOLD = 30
+SHOW_RSI_ZONES = True
 
-FIGURE_SIZE = (14, 10.8)   # extra height reserved for the MA footer + gap
-SHOW_MA_FOOTER = True      # table under volume: value / role / distance
+FIGURE_SIZE = (14, 10.8)   # extra height reserved for the MA role sheet
+SHOW_MA_FOOTER = True      # table under price: value / role / distance
 SHOW_DISTANCE_ON_LABELS = True  # also append % distance to right-edge MA tags
-PRICE_VOLUME_GAP = 0.08    # figure-fraction gap between price and volume
-FOOTER_GAP = 0.06          # figure-fraction gap between volume and the MA table
 
 CLOSE_COLOR = "#1f77b4"
 EMA_COLOR = "#E15FC3"
@@ -71,6 +73,7 @@ SMA50_COLOR = "#2ca02c"
 SMA200_COLOR = "#C80C01"
 SUPPORT_COLOR = "#2ca02c"
 RESISTANCE_COLOR = "#d62728"
+RSI_COLOR = "#FF9900"
 UNCONFIRMED_ALPHA = 0
 
 # ====================================================
@@ -171,6 +174,12 @@ def format_distance(price: float, ma_value: float) -> str:
     return f"{(price - ma_value) / ma_value * 100:+.1f}%"
 
 
+def format_rsi(value) -> str:
+    if pd.isna(value):
+        return "n/a"
+    return f"{float(value):.1f}"
+
+
 def ma_snapshot_rows(df: pd.DataFrame) -> list[dict]:
     """Latest MA value, S/R role, and % distance from close."""
     last = df.iloc[-1]
@@ -250,11 +259,13 @@ def structure_from_swings(df: pd.DataFrame) -> dict:
 def print_levels(df: pd.DataFrame, structure: dict, coin_name: str, coin_ticker: str):
     last = df.iloc[-1]
     price = float(last["close"])
+    rsi = last["RSI"] if "RSI" in df.columns else float("nan")
     print("=" * 64)
     print(f"{coin_name} ({coin_ticker})  dynamic S/R + swing structure")
     print("=" * 64)
     print(f"Latest close:    {format_price(price)}   ({df.index[-1].date()})")
     print(f"Structure:       {structure['label']}")
+    print(f"RSI({RSI_WINDOW}):        {format_rsi(rsi)}")
     print()
     print(f"{'MA':<10}{'Value':>14}{'Role':>14}")
     print("-" * 38)
@@ -282,19 +293,21 @@ def print_levels(df: pd.DataFrame, structure: dict, coin_name: str, coin_ticker:
     print("MA rule: above the average = support, below = resistance.")
     print("Swing rule: confirmed pivot only after SWING_RIGHT extra bars.")
     print("Structure uses the last two confirmed highs and last two lows.")
-    print("Distance to each MA is on the chart footer / right-edge labels.")
+    print("Distance to each MA is on the role sheet / right-edge labels.")
     print("=" * 64 + "\n")
 
 
-def draw_ma_footer(ax, df: pd.DataFrame, structure: dict):
-    """Compact table under the volume pane. Not a third data plot."""
+def draw_ma_rolesheet(ax, df: pd.DataFrame, structure: dict):
+    """Compact table under the price pane. Not a time-series plot."""
     ax.set_axis_off()
     last_date = df.index[-1].date()
     price = float(df.iloc[-1]["close"])
+    rsi = df.iloc[-1]["RSI"] if "RSI" in df.columns else float("nan")
     rows = ma_snapshot_rows(df)
 
     ax.set_title(
         f"Close {format_price(price)}  ({last_date})   ·   {structure['label']}   ·   "
+        f"RSI({RSI_WINDOW}) {format_rsi(rsi)}   ·   "
         "distance = (close − MA) / MA",
         fontsize=9,
         loc="left",
@@ -348,6 +361,25 @@ def draw_ma_footer(ax, df: pd.DataFrame, structure: dict):
             table[i, col].set_edgecolor("#dddddd")
 
 
+def draw_rsi(ax, df: pd.DataFrame):
+    """RSI pane styled like 21_50_200_chart.py."""
+    if SHOW_RSI_ZONES:
+        ax.axhspan(RSI_OVERBOUGHT, 100, color="#E15FC3", alpha=0.08, zorder=0)
+        ax.axhspan(0, RSI_OVERSOLD, color="#00D118", alpha=0.08, zorder=0)
+    ax.plot(
+        df.index, df["RSI"], color=RSI_COLOR, linewidth=1.5,
+        label=f"RSI({RSI_WINDOW})",
+    )
+    ax.axhline(RSI_OVERBOUGHT, color="#E15FC3", linestyle="--", alpha=0.6, label="Overbought")
+    ax.axhline(RSI_OVERSOLD, color="#00D118", linestyle="--", alpha=0.6, label="Oversold")
+    ax.axhline(50, color="gray", linestyle=":", alpha=0.5)
+    ax.set_ylabel("RSI")
+    ax.set_ylim(0, 100)
+    ax.legend(loc="upper left", fontsize=8)
+    if SHOW_GRID:
+        ax.grid(True, alpha=0.3)
+
+
 def draw_one_chart(
     coin_name: str,
     coin_ticker: str,
@@ -360,17 +392,17 @@ def draw_one_chart(
     df = price_data.get_price_data(coin=coin_ticker).copy()
     df = naive_index(df).sort_index()
 
-    required = {"open", "high", "low", "close", "volumeto"}
+    required = {"high", "low", "close"}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"{coin_ticker} data is missing columns: {sorted(missing)}")
 
+    # Indicators on full history so a short window still has SMA200 / seeded RSI.
     df = add_ema(df, EMA_FAST)
     df = add_sma(df, SMA_MID)
     df = add_sma(df, SMA_SLOW)
+    df = add_rsi(df, window=RSI_WINDOW)
     df = add_swing_points(df, left=SWING_LEFT, right=SWING_RIGHT)
-    df["vol_sma"] = df["volumeto"].rolling(window=VOLUME_SMA_DAYS).mean()
-    df["up_day"] = df["close"] >= df["open"]
 
     if days_back:
         df = df.iloc[-days_back:]
@@ -378,20 +410,20 @@ def draw_one_chart(
     structure = structure_from_swings(df)
     print_levels(df, structure, coin_name, coin_ticker)
 
-    last = df.iloc[-1]
-    price = float(last["close"])
     ma_rows = ma_snapshot_rows(df)
 
-    if SHOW_MA_FOOTER:
-        fig = plt.figure(figsize=FIGURE_SIZE)
-        gs = fig.add_gridspec(3, 1, height_ratios=[3.2, 1.0, 0.78], hspace=0.32)
-        ax1 = fig.add_subplot(gs[0])
-        ax2 = fig.add_subplot(gs[1], sharex=ax1)
-        ax3 = fig.add_subplot(gs[2])
-    else:
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=FIGURE_SIZE, gridspec_kw={"height_ratios": [3.2, 1]}, sharex=True)
-        ax3 = None
+    fig = plt.figure(figsize=FIGURE_SIZE)
     plt.style.use("fast")
+    if SHOW_MA_FOOTER:
+        gs = fig.add_gridspec(3, 1, height_ratios=[3.4, 0.78, 1.05], hspace=0.38)
+        ax1 = fig.add_subplot(gs[0])
+        ax_roles = fig.add_subplot(gs[1])
+        ax_rsi = fig.add_subplot(gs[2], sharex=ax1)
+    else:
+        gs = fig.add_gridspec(2, 1, height_ratios=[3.4, 1.05], hspace=0.22)
+        ax1 = fig.add_subplot(gs[0])
+        ax_roles = None
+        ax_rsi = fig.add_subplot(gs[1], sharex=ax1)
 
     ax1.plot(df.index, df["close"], color=CLOSE_COLOR, linewidth=1.25, label=f"{coin_name} Close")
     ax1.plot(df.index, df[f"EMA{EMA_FAST}"], color=EMA_COLOR, linewidth=1.2, label=f"EMA{EMA_FAST}")
@@ -413,7 +445,7 @@ def draw_one_chart(
     if len(df) > SWING_RIGHT:
         unconfirmed_from = df.index[-SWING_RIGHT]
         ax1.axvspan(unconfirmed_from, df.index[-1], color="#888888", alpha=UNCONFIRMED_ALPHA)
-        ax2.axvspan(unconfirmed_from, df.index[-1], color="#888888", alpha=UNCONFIRMED_ALPHA)
+        ax_rsi.axvspan(unconfirmed_from, df.index[-1], color="#888888", alpha=UNCONFIRMED_ALPHA)
 
     x_last = df.index[-1]
     for row in ma_rows:
@@ -425,7 +457,7 @@ def draw_one_chart(
             label += f"  {row['dist']}"
         ax1.annotate(label, xy=(x_last, row["value"]), xytext=(8, 0), textcoords="offset points", color=row["color"], fontsize=8, va="center")
 
-    title = f"{coin_name} • S/R + swings • {structure['label']}"
+    title = f"{coin_name} • S/R + swings + RSI({RSI_WINDOW}) • {structure['label']}"
     if days_back:
         title += f" — last {days_back} days"
     if LOG_SCALE:
@@ -437,37 +469,17 @@ def draw_one_chart(
     if SHOW_GRID:
         ax1.grid(True, alpha=0.3)
     add_window_date_formatters(ax1, days_back)
-    ax1.tick_params(axis="x", labelbottom=True)
+    plt.setp(ax1.get_xticklabels(), visible=False)
+    ax1.tick_params(axis="x", labelbottom=False)
 
-    vol_colors = ["#2ca02c" if up else "#d62728" for up in df["up_day"]]
-    ax2.bar(df.index, df["volumeto"], color=vol_colors, width=0.9, alpha=0.75, label="Volume")
-    ax2.plot(df.index, df["vol_sma"], color="#263549", linewidth=1.4, label=f"{VOLUME_SMA_DAYS}d vol SMA")
-    ax2.set_ylabel("Volume (USD)")
-    ax2.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, _p: f"${x/1e9:.1f}B" if x >= 1e9 else f"${x/1e6:.0f}M" if x >= 1e6 else f"${x:,.0f}"))
-    ax2.legend(loc="upper left", fontsize=8)
-    if SHOW_GRID:
-        ax2.grid(True, alpha=0.3)
-    ax2.tick_params(axis="x", labelbottom=False)
-    plt.setp(ax2.get_xticklabels(), visible=False)
+    if ax_roles is not None:
+        draw_ma_rolesheet(ax_roles, df, structure)
 
-    if ax3 is not None:
-        draw_ma_footer(ax3, df, structure)
+    draw_rsi(ax_rsi, df)
+    add_window_date_formatters(ax_rsi, days_back)
+    ax_rsi.tick_params(axis="x", labelbottom=True)
 
-    # fig.tight_layout()
-    box1 = ax1.get_position()
-    box2 = ax2.get_position()
-    vol_top = box1.y0 - PRICE_VOLUME_GAP
-    vol_bottom = vol_top - box2.height
-    if vol_bottom < 0.02:
-        vol_bottom = 0.02
-    ax2.set_position([box2.x0, vol_bottom, box2.width, vol_top - vol_bottom])
-
-    if SHOW_MA_FOOTER and ax3 is not None:
-        box2 = ax2.get_position()
-        box3 = ax3.get_position()
-        new_top = box2.y0 - FOOTER_GAP
-        new_bottom = max(0.02, new_top - box3.height)
-        ax3.set_position([box3.x0, new_bottom, box3.width, new_top - new_bottom])
+    fig.subplots_adjust(left=0.07, right=0.96, top=0.93, bottom=0.10)
 
     if not _backend_is_interactive():
         safe = coin_ticker.lower().replace(" ", "_")
@@ -484,7 +496,7 @@ def draw_one_chart(
 
 
 def draw(days_back: int | None = DAYS_BACK, block_window: bool = BLOCK_WINDOW):
-    choices = get_coin_choice("Resistance / Support + Volume - Coin Selection")
+    choices = get_coin_choice("Resistance / Support + RSI - Coin Selection")
     total = len(choices)
     for i, (coin_name, coin_ticker) in enumerate(choices, start=1):
         is_last = i == total
