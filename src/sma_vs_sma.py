@@ -1,8 +1,11 @@
+import argparse
+
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.ticker as ticker
 
 import get_price_data_cryptocompare as price_data
+from coin_menu import coins_as_pairs, get_coin_choice, resolve_coin_arg
 from indicators import add_rsi, add_sma
 
 
@@ -29,45 +32,18 @@ RSI_COLOR = '#FF9900'
 # ==================================================
 
 
-def get_coin_choice() -> str:
-    """Expanded & future-proof coin selector (shared pattern with other charts)"""
-    print("\n" + "="*60)
-    print("111/50 SMA + RSI Chart - Coin Selection")
-    print("="*60)
-    print("1) BTC")
-    print("2) FARTCOIN")
-    print("3) TROLL")
-    print("4) Any Other → type ticker (PEPE, DOGE, SOL, etc.)")
-    print("="*60)
-    while True:
-        choice = input("\nEnter 1-4 or type ticker: ").strip().upper()
-        if choice in ["1", "BTC"]:
-            return "BTC"
-        elif choice in ["2", "FARTCOIN"]:
-            return "FARTCOIN"
-        elif choice in ["3", "TROLL"]:
-            return "TROLL"
-        elif choice and len(choice) >= 2:  # free-form ticker
-            print(f"→ Using custom ticker → {choice}")
-            return choice
-        else:
-            print("✘ Invalid. Try 1, 2, 3 or type a ticker.")
-
-
-def draw(block_window=BLOCK_WINDOW, rsi_window=RSI_WINDOW, days_back=DAYS_BACK):
-    coin_ticker = get_coin_choice()
-   
-    # Beautiful display names
-    coin_display_names = {
-        "BTC": "Bitcoin",
-        "FARTCOIN": "Fartcoin",
-        "TROLL": "Troll",
-    }
-    coin_name = coin_display_names.get(coin_ticker, coin_ticker)
-    
+def draw_one_chart(
+    coin_name: str,
+    coin_ticker: str,
+    *,
+    block_window=BLOCK_WINDOW,
+    rsi_window=RSI_WINDOW,
+    days_back=DAYS_BACK,
+    close_after=True,
+):
     print(f"\n\U0001F4CA Loading data for {coin_name} ({coin_ticker})...")
     data_frame = price_data.get_price_data(coin=coin_ticker)
-    
+
     if days_back is not None:
         data_frame = data_frame.sort_index().iloc[-days_back:]
 
@@ -144,7 +120,69 @@ def draw(block_window=BLOCK_WINDOW, rsi_window=RSI_WINDOW, days_back=DAYS_BACK):
 
     print(f"\nDrawing {coin_name} chart with 111/50 SMAs + RSI({rsi_window})...")
     plt.show(block=block_window)
+    if close_after and block_window:
+        plt.close(fig)
 
 
-if __name__ == '__main__':   # ← Keeps standalone runs working
-    draw()   # Uses defaults from CONFIG
+def draw(
+    block_window=BLOCK_WINDOW,
+    rsi_window=RSI_WINDOW,
+    days_back=DAYS_BACK,
+    choices: list[tuple[str, str]] | None = None,
+):
+    if choices is None:
+        choices = get_coin_choice("111/50 SMA + RSI Chart - Coin Selection")
+    total = len(choices)
+
+    for i, (coin_name, coin_ticker) in enumerate(choices, start=1):
+        is_last = i == total
+        if total > 1:
+            print(f"\n[{i}/{total}] {coin_name}")
+
+        per_coin_block = block_window if total == 1 else True
+        try:
+            draw_one_chart(
+                coin_name,
+                coin_ticker,
+                block_window=per_coin_block,
+                rsi_window=rsi_window,
+                days_back=days_back,
+                close_after=True,
+            )
+        except Exception as exc:
+            print(f"✘ {coin_name} ({coin_ticker}) failed: {exc}")
+            if is_last and total > 1:
+                print(f"\nDone. Stopped after last coin ({coin_name}).")
+            continue
+        if is_last and total > 1:
+            print(f"\nDone. Stopped after last coin ({coin_name}).")
+
+
+def _parse_args():
+    parser = argparse.ArgumentParser(
+        description="111/50 SMA + RSI chart.",
+    )
+    parser.add_argument(
+        "--coin", type=str, default=None,
+        help="Ticker, display name, or 1-based coins.csv index. Skips the prompt.",
+    )
+    parser.add_argument(
+        "--all", action="store_true", dest="all_coins",
+        help="Chart every coin in coins.csv, in file order. Skips the prompt.",
+    )
+    return parser.parse_args()
+
+
+if __name__ == '__main__':
+    args = _parse_args()
+    choices = None
+    if args.all_coins:
+        choices = coins_as_pairs()
+        labels = ", ".join(name for name, _ in choices)
+        print(f"→ ALL ({labels})")
+    elif args.coin:
+        name, symbol = resolve_coin_arg(args.coin)
+        print(f"→ {name} ({symbol})")
+        choices = [(name, symbol)]
+
+    draw(choices=choices)
