@@ -62,6 +62,7 @@ VOLUME_SMA_DAYS = 20
 FIGURE_SIZE = (14, 10.8)   # extra height reserved for the MA footer + gap
 SHOW_MA_FOOTER = True      # table under volume: value / role / distance
 SHOW_DISTANCE_ON_LABELS = True  # also append % distance to right-edge MA tags
+PRICE_VOLUME_GAP = 0.10    # figure-fraction gap between price and volume
 FOOTER_GAP = 0.06          # figure-fraction gap between volume and the MA table
 
 CLOSE_COLOR = "#1f77b4"
@@ -488,7 +489,15 @@ def draw_one_chart(
         draw_ma_footer(ax3, df, structure)
 
     fig.tight_layout()
-    if SHOW_MA_FOOTER:
+    box1 = ax1.get_position()
+    box2 = ax2.get_position()
+    vol_top = box1.y0 - PRICE_VOLUME_GAP
+    vol_bottom = vol_top - box2.height
+    if vol_bottom < 0.02:
+        vol_bottom = 0.02
+    ax2.set_position([box2.x0, vol_bottom, box2.width, vol_top - vol_bottom])
+
+    if SHOW_MA_FOOTER and ax3 is not None:
         box2 = ax2.get_position()
         box3 = ax3.get_position()
         new_top = box2.y0 - FOOTER_GAP
