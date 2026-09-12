@@ -62,7 +62,7 @@ VOLUME_SMA_DAYS = 20
 FIGURE_SIZE = (14, 10.8)   # extra height reserved for the MA footer + gap
 SHOW_MA_FOOTER = True      # table under volume: value / role / distance
 SHOW_DISTANCE_ON_LABELS = True  # also append % distance to right-edge MA tags
-FOOTER_GAP = 0.11          # figure-fraction gap between volume and the MA table
+FOOTER_GAP = 0.06          # figure-fraction gap between volume and the MA table
 
 CLOSE_COLOR = "#1f77b4"
 EMA_COLOR = "#E15FC3"
