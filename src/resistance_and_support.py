@@ -80,7 +80,7 @@ SMA200_COLOR = "#C80C01"
 SUPPORT_COLOR = "#2ca02c"
 RESISTANCE_COLOR = "#d62728"
 RSI_COLOR = "#FF9900"
-UNCONFIRMED_ALPHA = 0
+UNCONFIRMED_ALPHA = 0.3
 
 # ====================================================
 
