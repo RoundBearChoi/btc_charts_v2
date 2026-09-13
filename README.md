@@ -88,7 +88,8 @@ src/
 ├── interactive_classic_200_week_sma.py  # Interactive weekly SMA slider
 ├── usd_m2_vs_btc.py                  # BTC vs US M2 money supply (FRED)
 ├── m2_fair_value_btc.py              # BTC vs rolling US-M2 implied fair value
-├── resistance_and_support.py         # Dynamic MA S/R + confirmed swings + role sheet + RSI
+├── resistance_and_support.py         # MAs as live S/R + swing levels + RSI
+├── resistance_and_support.md         # Short notes for the S/R script
 │
 ├── funding_rates_btc_binance.py      # BTC Price + Funding Rate + Z-Score (Binance)
 ├── funding_rates_fartcoin_hype.py    # FARTCOIN Price + Funding Rate + Z-Score (Hyperliquid)
@@ -122,7 +123,7 @@ src/
 | `interactive_classic_200_week_sma.py` | Interactive slider (3–250 weeks) for the classic weekly SMA. Uses Sunday weekly closes for accuracy. |
 | `usd_m2_vs_btc.py` | Two-panel comparison of monthly BTC close vs US M2 money supply (FRED). Raw levels — the long-term “money stock vs price” view. |
 | `m2_fair_value_btc.py` | Companion to `usd_m2_vs_btc.py`. Rolling 48-month log(BTC) ~ log(M2) fair value on a log price axis, plus residual z-score. Prints spot / implied / gap. Fit uses prior months only (no look-ahead). US M2SL, not global M2. Headless runs save `output/m2_fair_value_btc.png`. |
-| `resistance_and_support.py` | Price + MA role sheet + RSI(14). EMA21 / SMA50 / SMA200 are labeled **support** or **resistance** from the latest close; confirmed swing highs/lows are plotted as static levels; the last `SWING_RIGHT` bars are a gray unconfirmed band. Prints HH/HL/LH/LL structure and RSI. Same `coins.csv` menu as `21_50_200_chart.py` (no `--coin` CLI yet). Volume lives on `21_50_200_chart.py` / `sma_vs_sma.py`. See [Resistance / Support chart](#resistance--support-chart). |
+| `resistance_and_support.py` | Price + MA role sheet + RSI(14): EMA21/SMA50/SMA200 labeled as live support or resistance, confirmed swing high/low, and a compact value/role/distance table under price. Prints HH/HL/LH/LL structure and current RSI. Same `coins.csv` menu as `21_50_200_chart.py`. Volume lives on `21_50_200_chart.py` / `sma_vs_sma.py`. Notes: [`src/resistance_and_support.md`](src/resistance_and_support.md). |
 
 ### Funding Rate Charts
 
@@ -139,104 +140,6 @@ src/
 
 ---
 
-## Resistance / Support chart
-
-`src/resistance_and_support.py` is a **role sheet**, not another volume chart. It answers: which moving averages are acting as support vs resistance *right now*, where the last confirmed swing high/low sit, and what RSI is doing.
-
-```bash
-python src/resistance_and_support.py
-```
-
-The coin prompt is the same `1)`–`N)` / `ALL` menu as `21_50_200_chart.py` (`src/coins.csv` via `coin_menu.py`). There is no `--coin` / `--all` / `--days` CLI on this script yet — change `DAYS_BACK` and `LOG_SCALE` in the `CONFIG` block instead.
-
-### What the figure shows
-
-1. **Price pane**
-   - Close + EMA21 / SMA50 / SMA200
-   - Confirmed swing highs (red dots) and swing lows (green dots)
-   - Dotted horizontal line at the latest confirmed swing high (static resistance) and latest confirmed swing low (static support)
-   - Right-edge tags on each MA: `S` or `R`, last value, and `%` distance from close
-   - Gray band covering the last `SWING_RIGHT` bars (default 8). Those bars cannot confirm a pivot yet because confirmation needs future bars.
-
-2. **MA role sheet** (middle pane — a table, not a time series)
-   - Columns: MA | Value | Role | Distance
-   - Distance is `(close − MA) / MA`
-   - Green row = **support** (close ≥ MA), red row = **resistance** (close < MA)
-   - Title line also repeats close, date, HH/HL structure label, and RSI
-
-3. **RSI(14)**
-   - Same 70 / 50 / 30 treatment as `21_50_200_chart.py`
-   - Same gray unconfirmed span as the price pane
-
-Volume is intentionally omitted. Use `21_50_200_chart.py` or `sma_vs_sma.py` for volume.
-
-### How levels are defined
-
-**Moving averages (dynamic)**
-
-- Close at or above the MA → that MA is treated as **support**
-- Close below the MA → that MA is treated as **resistance**
-
-This is a live role from the latest close, not a forecast. A close through the MA flips the printed role on the next run.
-
-**Swing highs / lows (static, calculated — not eyeballed)**
-
-- A bar is a swing high if its **high** is the maximum of `SWING_LEFT` bars before and `SWING_RIGHT` bars after (defaults `8` / `8`).
-- A swing low is the same idea inverted on **lows**.
-- The newest `SWING_RIGHT` bars are never marked as pivots; they sit in the gray unconfirmed band.
-
-**Market structure (title + terminal)**
-
-Compares the last two *confirmed* swing highs and the last two confirmed swing lows:
-
-| Last two highs + last two lows | Label |
-|--------------------------------|-------|
-| higher high + higher low | `uptrend (HH + HL)` |
-| lower high + lower low | `downtrend (LH + LL)` |
-| higher high + lower low | `mixed (HH + LL)` |
-| lower high + higher low | `mixed (LH + HL)` |
-| fewer than two confirmed highs or two confirmed lows | `not enough confirmed swings` |
-
-The script does not print "bullish" or "bearish".
-
-### Terminal snapshot
-
-Each selected coin prints:
-
-- latest close and date
-- structure label above
-- RSI(14)
-- MA table (value + role)
-- last two confirmed swing highs and lows (`prev` / `latest`)
-
-Choosing `ALL` draws one chart after another and blocks on each window so you can close it before the next coin starts.
-
-### Headless / no Tkinter
-
-If the Matplotlib backend is not interactive (`Agg`, `svg`, …), the figure is written as `{ticker}_resistance_and_support.png` in the **current working directory** (repo root if you ran `python src/resistance_and_support.py` from there) and no window is opened. That path is different from `21_50_200_chart.py`, which saves under `output/`.
-
-### CONFIG knobs
-
-All at the top of `src/resistance_and_support.py`:
-
-| Knob | Default | Meaning |
-|------|---------|---------|
-| `DAYS_BACK` | `360` | Visible window after indicators are computed on full history. `None` = full history. |
-| `LOG_SCALE` | `False` | Log price axis. |
-| `EMA_FAST` / `SMA_MID` / `SMA_SLOW` | `21` / `50` / `200` | Dynamic S/R averages. |
-| `SWING_LEFT` / `SWING_RIGHT` | `8` / `8` | Pivot confirmation window. `SWING_RIGHT` also sizes the gray unconfirmed band. |
-| `RSI_WINDOW` / `RSI_OVERBOUGHT` / `RSI_OVERSOLD` | `14` / `70` / `30` | RSI pane. |
-| `SHOW_MA_FOOTER` | `True` | Hide the middle role table when `False`. |
-| `SHOW_DISTANCE_ON_LABELS` | `True` | Append `%` distance to the right-edge MA tags. |
-| `HEIGHT_RATIOS` | `(3.4, 0.78, 1.05)` | Price / role sheet / RSI pane weights. |
-| `SPACE_PRICE_TO_ROLES` / `SPACE_ROLES_TO_RSI` | `0.70` / `0.10` | Spacer rows (wide gap under price, tight gap above RSI). |
-| `UNCONFIRMED_ALPHA` | `0.3` | Opacity of the gray unconfirmed band. |
-| `BLOCK_WINDOW` | `True` | `plt.show(block=...)` for a single-coin run. |
-
-EMA / SMA / RSI are computed on the **full** cached series first, then the window is sliced, so a 360-day view still has a seeded SMA200 and RSI.
-
----
-
 ## Common Patterns
 
 Almost every chart script follows the same structure:
@@ -248,10 +151,7 @@ Almost every chart script follows the same structure:
 
 This makes it very easy to tweak look-and-feel or analysis parameters without touching the plotting logic.
 
-On a machine with Tkinter + a GUI backend (typically TkAgg), charts open in an interactive window. On headless / SSH sessions, or if Tkinter is missing:
-
-- `21_50_200_chart.py` and `m2_fair_value_btc.py` save under `output/`
-- `resistance_and_support.py` saves `{ticker}_resistance_and_support.png` in the current working directory
+On a machine with Tkinter + a GUI backend (typically TkAgg), charts open in an interactive window. On headless / SSH sessions, or if Tkinter is missing, `21_50_200_chart.py` and `m2_fair_value_btc.py` save a PNG instead of calling `plt.show()`.
 
 ---
 
@@ -272,11 +172,9 @@ On a machine with Tkinter + a GUI backend (typically TkAgg), charts open in an i
 Terminal snapshots and titles describe position, not a forecast:
 
 - **above / below** — close vs a moving average
-- **support / resistance** — live MA role on `resistance_and_support.py` (close ≥ MA = support, close < MA = resistance)
 - **held / lost** — consecutive sessions on the current side of SMA200
 - **retested / not retested** — whether price has tagged SMA200 again after the last cross onto this side
 - **invalidation** — the close that would flip that SMA200 side, or the next confirmed swing that would change HH/HL/LH/LL structure
-- **unconfirmed** — the last `SWING_RIGHT` bars on `resistance_and_support.py`; pivots there are not marked yet
 
 The scripts do not print "bullish" or "bearish".
 
