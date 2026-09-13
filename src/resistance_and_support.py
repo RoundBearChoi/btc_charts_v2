@@ -46,7 +46,7 @@ from coin_menu import get_coin_choice
 from indicators import add_ema, add_rsi, add_sma
 
 # ====================== CONFIG ======================
-DAYS_BACK = 360            # chart window; None = full history
+DAYS_BACK = 360 * 2
 BLOCK_WINDOW = True
 SHOW_GRID = True
 LOG_SCALE = False
