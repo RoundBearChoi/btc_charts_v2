@@ -198,3 +198,6 @@ fabric.properties
 
 # Local downloaded market data caches
 src/spot_etf_data/
+
+# CoinGecko local caches (csv already ignored globally)
+src/coingecko_data/**/*.csv
