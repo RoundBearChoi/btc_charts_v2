@@ -9,6 +9,8 @@ src/coingecko_data/
 ```
 
 CSV files are gitignored. First run of a chart creates them.
+Caches are append-only: an Analyst backfill is kept after you switch to Basic.
+Plan caps only limit live API requests, not the file on disk.
 
 Env:
 
