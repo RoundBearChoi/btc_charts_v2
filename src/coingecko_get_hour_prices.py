@@ -9,6 +9,7 @@ Analyst: prefer ``/coins/{id}/ohlc/range?interval=daily`` when the plan
 flag says that endpoint exists.
 
 Cache: src/coingecko_data/hourly/{gecko_id}.csv  (raw hourly points)
+The cache is append-only. Plan caps only limit live API requests.
 The returned frame is daily OHLCV, same columns as the daily fetcher.
 """
 
@@ -108,7 +109,6 @@ def _ohlc_range_daily(coin_id: str, days: int) -> pd.DataFrame:
         return pd.DataFrame()
     rows = []
     for item in payload:
-        # [timestamp_ms, open, high, low, close]
         rows.append(
             {
                 "time": pd.to_datetime(int(item[0]), unit="ms", utc=True),
@@ -125,13 +125,6 @@ def _ohlc_range_daily(coin_id: str, days: int) -> pd.DataFrame:
     return df[["open", "high", "low", "close", "volumefrom", "volumeto"]]
 
 
-def _trim_hourly(df: pd.DataFrame, days: int) -> pd.DataFrame:
-    if df.empty:
-        return df
-    cutoff = df.index.max() - pd.Timedelta(days=days)
-    return df.loc[df.index >= cutoff]
-
-
 def get_price_data(
     coin: str = "BTC",
     days: Optional[int] = None,
@@ -139,25 +132,26 @@ def get_price_data(
 ) -> pd.DataFrame:
     plan = cg.get_plan()
     coin_id = cg.gecko_id_for(coin)
-    lookback = cg.clamp_days(days, plan)
+    api_days = cg.clamp_days(days, plan)
 
     logger.info(
-        "CoinGecko hourly→OHLC %s (%s) plan=%s days=%s",
+        "CoinGecko hourly→OHLC %s (%s) plan=%s api_days=%s visible=%s",
         coin.upper(),
         coin_id,
         plan.name,
-        lookback,
+        api_days,
+        days,
     )
 
     if plan.has_ohlc_range:
-        daily = _ohlc_range_daily(coin_id, lookback)
+        daily = _ohlc_range_daily(coin_id, api_days)
         if daily.empty:
             raise RuntimeError(f"CoinGecko ohlc/range returned nothing for {coin_id}")
         print(
             f"✅ {coin.upper()} OHLC (analyst range): {len(daily)} rows  "
             f"{daily.index.min().date()} → {daily.index.max().date()}"
         )
-        return daily.sort_index()
+        return cg.slice_visible(daily.sort_index(), days)
 
     path = cg.hourly_cache_path(coin_id)
     cached = pd.DataFrame() if force_download else cg.load_csv(path)
@@ -168,20 +162,18 @@ def get_price_data(
         behind = (expected - latest).days
         if behind <= 0 and not force_download:
             print(f"✅ Hourly cache up to date ({coin_id}, latest {latest}).")
-            daily = _hourly_to_daily(cached)
-            return daily.iloc[-lookback:] if len(daily) > lookback else daily
-        fetch_days = min(lookback, max(behind + 3, 3))
+            return cg.slice_visible(_hourly_to_daily(cached), days)
+        fetch_days = min(api_days, max(behind + 3, 3))
         logger.info("Hourly cache %s day(s) behind — fetching %s days", behind, fetch_days)
     else:
-        fetch_days = lookback
+        fetch_days = api_days
         logger.info("No hourly cache for %s — fetching %s days", coin_id, fetch_days)
 
     fresh = _download_hourly(coin_id, fetch_days)
     if fresh.empty:
         if not cached.empty:
             logger.warning("No new hourly rows; using cache.")
-            daily = _hourly_to_daily(cached)
-            return daily.iloc[-lookback:] if len(daily) > lookback else daily
+            return cg.slice_visible(_hourly_to_daily(cached), days)
         raise RuntimeError(f"CoinGecko returned no hourly prices for {coin_id}")
 
     if cached.empty:
@@ -190,8 +182,6 @@ def get_price_data(
         combined = pd.concat([cached, fresh])
         combined = combined[~combined.index.duplicated(keep="last")].sort_index()
 
-    combined = _trim_hourly(combined, lookback)
-    # Persist raw hourly so the next run can update the tail only.
     hourly_out = combined.copy()
     if hourly_out.index.tz is not None:
         hourly_out.index = hourly_out.index.tz_convert("UTC").tz_localize(None)
@@ -199,12 +189,13 @@ def get_price_data(
     cg.save_csv(hourly_out, path)
 
     daily = _hourly_to_daily(combined)
-    daily = daily.iloc[-lookback:] if len(daily) > lookback else daily
+    visible = cg.slice_visible(daily, days)
     print(
-        f"✅ {coin.upper()} daily OHLC from hourly: {len(daily)} rows  "
-        f"{daily.index.min().date()} → {daily.index.max().date()}"
+        f"✅ {coin.upper()} daily OHLC from hourly: cache {len(daily)} rows, "
+        f"visible {len(visible)}  "
+        f"{visible.index.min().date()} → {visible.index.max().date()}"
     )
-    return daily
+    return visible
 
 
 def get_btc_price_data(force_download: bool = False) -> pd.DataFrame:
