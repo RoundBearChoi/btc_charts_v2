@@ -10,6 +10,10 @@ Keys checked in order:
   COINGECKO_PRO_API_KEY
   CG_DEMO_API_KEY
   CG_API_KEY
+
+Plan caps apply to live API requests only. Local CSV caches are
+append-only so an Analyst backfill can keep serving 10y of bars after
+you drop to Basic.
 """
 
 from __future__ import annotations
@@ -120,16 +124,29 @@ def gecko_id_for(coin: str) -> str:
 
 
 def clamp_days(days: Optional[int], plan: Optional[Plan] = None) -> int:
-    """Resolve requested lookback against the active plan cap."""
+    """How far back a *live API request* may go on this plan.
+
+    Does not limit how much history we keep on disk or return from cache.
+    """
     plan = plan or get_plan()
     if days is None:
-        return 365 if plan.max_days is None else plan.max_days
+        return 3650 if plan.max_days is None else plan.max_days
     days = int(days)
     if days < 2:
         raise ValueError("days must be at least 2")
     if plan.max_days is not None:
         return min(days, plan.max_days)
     return days
+
+
+def slice_visible(df: pd.DataFrame, days: Optional[int]) -> pd.DataFrame:
+    """Return the caller's requested window. ``days=None`` keeps the full cache."""
+    if df.empty or days is None:
+        return df
+    days = int(days)
+    if days < 1 or len(df) <= days:
+        return df
+    return df.iloc[-days:]
 
 
 def daily_cache_path(coin_id: str) -> Path:
