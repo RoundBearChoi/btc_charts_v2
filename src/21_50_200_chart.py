@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import pandas as pd
 
-import get_price_data_cryptocompare as price_data
+import coingecko_get_daily_prices as price_data
 from coin_menu import coins_as_pairs, get_coin_choice, resolve_coin_arg
 from indicators import add_ema, add_rsi, add_sma, last_crossover
 from plotting_utils import (
@@ -29,7 +29,7 @@ from plotting_utils import (
 # CONFIGURATION - Edit these values as needed
 # ==================================================
 LOG_SCALE = False
-DAYS_BACK = 365 * 5          # Set None for full history
+DAYS_BACK = 360              # Demo cap is 365; raise this after upgrading plan
 BLOCK_WINDOW = True          # False = script continues immediately
 SHOW_GRID = True
 
@@ -196,8 +196,9 @@ def draw_one_chart(
     rsi_window=RSI_WINDOW,
     close_after=True,
 ):
-    print(f"\n\U0001F4CA Loading data for {coin_name} ({coin_ticker})...")
-    data_frame = price_data.get_price_data(coin=coin_ticker).copy()
+    print(f"\n\U0001F4CA Loading CoinGecko daily data for {coin_name} ({coin_ticker})...")
+    fetch_days = days_back if days_back is not None else 360
+    data_frame = price_data.get_price_data(coin=coin_ticker, days=fetch_days).copy()
     data_frame = data_frame.sort_index()
 
     ema_col = f"EMA{EMA_FAST}"
