@@ -10,6 +10,10 @@ Price + MA role sheet + RSI(14) for a coin from src/coins.csv:
 
 Volume lives on the 21/50/200 and SMA-vs-SMA scripts, not here.
 
+Price source: CoinGecko (last 360 days on Demo). Daily OHLC is resampled
+from hourly /market_chart/range windows because Demo /ohlc coarsens
+long lookbacks to 4-day candles.
+
 Rule used for moving averages:
   price above the MA  -> that MA is treated as support
   price below the MA  -> that MA is treated as resistance
@@ -41,12 +45,12 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import pandas as pd
 
-import get_price_data_cryptocompare as price_data
+import coingecko_get_hour_prices as price_data
 from coin_menu import get_coin_choice
 from indicators import add_ema, add_rsi, add_sma
 
 # ====================== CONFIG ======================
-DAYS_BACK = 360 * 2
+DAYS_BACK = 360
 BLOCK_WINDOW = True
 SHOW_GRID = True
 LOG_SCALE = False
@@ -67,9 +71,6 @@ FIGURE_SIZE = (14, 10.8)   # extra height reserved for the MA role sheet
 SHOW_MA_FOOTER = True      # table under price: value / role / distance
 SHOW_DISTANCE_ON_LABELS = True  # also append % distance to right-edge MA tags
 HEIGHT_RATIOS = (3.4, 0.78, 1.05)  # price, role sheet, RSI
-# Gaps are GridSpec row weights in the same units as HEIGHT_RATIOS.
-# Matplotlib's single hspace cannot differ per pair of panes, so empty
-# spacer rows are used instead.
 SPACE_PRICE_TO_ROLES = 0.70    # wider gap under the price pane
 SPACE_ROLES_TO_RSI = 0.10      # tighter gap above RSI
 
@@ -388,8 +389,9 @@ def draw_one_chart(
     block_window: bool = BLOCK_WINDOW,
     close_after: bool = True,
 ):
-    print(f"\nLoading {coin_name} ({coin_ticker}) price data...")
-    df = price_data.get_price_data(coin=coin_ticker).copy()
+    print(f"\nLoading {coin_name} ({coin_ticker}) price data from CoinGecko...")
+    fetch_days = DAYS_BACK if days_back is None else days_back
+    df = price_data.get_price_data(coin=coin_ticker, days=fetch_days).copy()
     df = naive_index(df).sort_index()
 
     required = {"high", "low", "close"}
@@ -397,7 +399,7 @@ def draw_one_chart(
     if missing:
         raise ValueError(f"{coin_ticker} data is missing columns: {sorted(missing)}")
 
-    # Indicators on full history so a short window still has SMA200 / seeded RSI.
+    # Demo only has ~360 days, so SMA200 is seeded from this window only.
     df = add_ema(df, EMA_FAST)
     df = add_sma(df, SMA_MID)
     df = add_sma(df, SMA_SLOW)
