@@ -1,15 +1,8 @@
 """Shared CoinGecko auth, plan limits, coin IDs, and HTTP helpers.
 
-Plan is selected with ``COINGECKO_PLAN`` (demo | basic | analyst).
-Upgrade later by changing that env var and using a Pro key — fetchers
-read caps from here instead of hard-coding Demo limits.
-
-Keys checked in order:
-  COINGECKO_API_KEY
-  COINGECKO_DEMO_API_KEY
-  COINGECKO_PRO_API_KEY
-  CG_DEMO_API_KEY
-  CG_API_KEY
+Env (set in ~/.bashrc):
+  COINGECKO_PLAN=demo|basic|analyst
+  COINGECKO_API_KEY=...          # Demo key or Pro key matching the plan
 
 Plan caps apply to live API requests only. Local CSV caches are
 append-only so an Analyst backfill can keep serving 10y of bars after
@@ -44,14 +37,6 @@ GECKO_IDS = {
     "FARTCOIN": "fartcoin",
     "TROLL": "troll-2",
 }
-
-KEY_ENV_VARS = (
-    "COINGECKO_API_KEY",
-    "COINGECKO_DEMO_API_KEY",
-    "COINGECKO_PRO_API_KEY",
-    "CG_DEMO_API_KEY",
-    "CG_API_KEY",
-)
 
 
 @dataclass(frozen=True)
@@ -107,12 +92,11 @@ def get_plan() -> Plan:
 
 
 def api_key() -> str:
-    for name in KEY_ENV_VARS:
-        value = os.getenv(name, "").strip()
-        if value:
-            return value
+    value = os.getenv("COINGECKO_API_KEY", "").strip()
+    if value:
+        return value
     raise RuntimeError(
-        "No CoinGecko API key found. Export one of: " + ", ".join(KEY_ENV_VARS)
+        "No CoinGecko API key found. Export COINGECKO_API_KEY in ~/.bashrc."
     )
 
 
