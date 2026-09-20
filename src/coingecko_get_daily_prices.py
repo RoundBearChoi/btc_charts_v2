@@ -3,9 +3,12 @@
 Used by 21/50/200 and other close-based charts.
 
 Demo / Basic: ``/coins/{id}/market_chart`` (daily when days > 90).
-Analyst: same endpoint with ``days=max`` when no cap.
+Analyst: same endpoint with ``days=max`` when asking for more than 365 days.
 
 Cache: src/coingecko_data/daily/{gecko_id}.csv
+
+The cache is append-only. Plan caps only limit live API requests, so an
+Analyst backfill stays on disk after you switch to Basic.
 
 On Demo, high/low equal close and open is the previous close.
 That is enough for volume bar coloring and MA/RSI work.
@@ -36,7 +39,6 @@ def _market_chart(coin_id: str, days: int | str) -> pd.DataFrame:
     frame = pd.DataFrame({"close": prices})
     frame["volumeto"] = volumes.reindex(frame.index)
     frame = frame.tz_convert("UTC")
-    # Collapse intra-day points (hourly windows) to one UTC day.
     daily = pd.DataFrame(
         {
             "close": frame["close"].resample("1D").last(),
@@ -53,11 +55,11 @@ def _market_chart(coin_id: str, days: int | str) -> pd.DataFrame:
     return daily[["open", "high", "low", "close", "volumefrom", "volumeto"]]
 
 
-def _trim_to_plan(df: pd.DataFrame, days: int) -> pd.DataFrame:
-    if df.empty:
-        return df
-    cutoff = df.index.max() - pd.Timedelta(days=days - 1)
-    return df.loc[df.index >= cutoff]
+def _days_param(plan, requested: Optional[int], fetch_days: int) -> int | str:
+    """Analyst can ask for days=max; Demo/Basic must stay inside the plan cap."""
+    if plan.max_days is None and (requested is None or requested > 365):
+        return "max"
+    return fetch_days
 
 
 def get_price_data(
@@ -67,15 +69,16 @@ def get_price_data(
 ) -> pd.DataFrame:
     plan = cg.get_plan()
     coin_id = cg.gecko_id_for(coin)
-    lookback = cg.clamp_days(days, plan)
+    api_days = cg.clamp_days(days, plan)
     path = cg.daily_cache_path(coin_id)
 
     logger.info(
-        "CoinGecko daily %s (%s) plan=%s days=%s cache=%s",
+        "CoinGecko daily %s (%s) plan=%s api_days=%s visible=%s cache=%s",
         coin.upper(),
         coin_id,
         plan.name,
-        lookback,
+        api_days,
+        days,
         path,
     )
 
@@ -86,20 +89,22 @@ def get_price_data(
         latest = cached.index.max().date()
         behind = (expected - latest).days
         if behind <= 0:
-            print(f"✅ Daily cache up to date ({coin_id}, latest {latest}).")
-            return _trim_to_plan(cached, lookback)
-        fetch_days = min(lookback, max(behind + 3, 2))
+            print(
+                f"✅ Daily cache up to date ({coin_id}, "
+                f"{len(cached)} rows, latest {latest})."
+            )
+            return cg.slice_visible(cached, days)
+        fetch_days = min(api_days, max(behind + 3, 2))
         logger.info("Daily cache %s day(s) behind — fetching %s days", behind, fetch_days)
     else:
-        fetch_days = lookback
+        fetch_days = api_days
         logger.info("No daily cache for %s — fetching %s days", coin_id, fetch_days)
 
-    days_param: int | str = "max" if plan.max_days is None and days is None else fetch_days
-    fresh = _market_chart(coin_id, days_param)
+    fresh = _market_chart(coin_id, _days_param(plan, days, fetch_days))
     if fresh.empty:
         if not cached.empty:
             logger.warning("CoinGecko returned no new daily rows; using cache.")
-            return _trim_to_plan(cached, lookback)
+            return cg.slice_visible(cached, days)
         raise RuntimeError(f"CoinGecko returned no daily prices for {coin_id}")
 
     if cached.empty:
@@ -108,13 +113,12 @@ def get_price_data(
         combined = pd.concat([cached, fresh])
         combined = combined[~combined.index.duplicated(keep="last")].sort_index()
 
-    combined = _trim_to_plan(combined, lookback)
     cg.save_csv(combined, path)
     print(
-        f"✅ {coin.upper()} daily: {len(combined)} rows  "
+        f"✅ {coin.upper()} daily cache: {len(combined)} rows  "
         f"{combined.index.min().date()} → {combined.index.max().date()}"
     )
-    return combined
+    return cg.slice_visible(combined, days)
 
 
 def get_btc_price_data(force_download: bool = False) -> pd.DataFrame:
