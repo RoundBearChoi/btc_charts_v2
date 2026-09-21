@@ -1,38 +1,29 @@
-"""CoinGecko Demo hourly increment fetcher.
+"""CoinGecko Analyst hourly fetcher.
 
-File: src_v3/demo_get_hourly_data_increments.py
+File: src_v3/analyst_get_hourly_data.py
 
-This script only tops up recent hourly snapshots. It does not backfill
-months of history. src_v3/analyst_get_hourly_data.py owns the long tail.
+Longer-range sibling of src_v3/demo_get_hourly_data_increments.py.
+Same hourly schema and cache path; this script never writes daily CSVs.
 
 Coin pick comes from src_v3/coin_menu.py + src_v3/coins.csv.
 
-On disk (only these two files per symbol):
+On disk (hourly only):
     src_v3/cg_data/{SYMBOL}_data_hourly.csv
         hourly snapshots: time, price, volume
-    src_v3/cg_data/{SYMBOL}_data_daily.csv
-        daily OHLC derived from those hours:
-        time, open, high, low, close, volumeto
 
-volume / volumeto is CoinGecko's sliding 24h sum, not session volume.
-Daily volumeto is the last 24h-volume snapshot of that UTC day.
-
-Daily OHLC from hourly snapshots:
-    open  = first hourly price of the UTC day
-    high  = max hourly price of the UTC day
-    low   = min hourly price of the UTC day
-    close = last hourly price of the UTC day
+volume is CoinGecko's sliding 24h sum, not session volume.
 
 Rules:
-    - No cache  -> seed latest UTC midnight back 60 days.
-    - Cache gap <= 60 days -> fetch the missing tail and merge.
-    - Cache gap  > 60 days -> error (use analyst_get_hourly_data.py).
-    - Daily CSV is always rebuilt from the full hourly cache.
-      It is not a separate Demo download.
+    - No cache -> seed latest UTC midnight back LOOKBACK_DAYS.
+    - Cache gap <= LOOKBACK_DAYS -> fetch the missing tail and merge.
+    - Cache gap  > LOOKBACK_DAYS -> error (raise LOOKBACK_DAYS or delete CSV).
+    - Existing short Demo caches are not backfilled behind the earliest row.
+    - Requests are split into CHUNK_DAYS windows with interval=hourly.
+    - Each successful chunk is saved so a mid-seed rerun can resume.
 
 Env:
-    COINGECKO_DEMO_API_KEY   Demo API key only (export in ~/.bashrc).
-    This file never reads COINGECKO_API_KEY or a Pro/Analyst key.
+    COINGECKO_ANALYST_API_KEY   Analyst / Pro API key only (export in ~/.bashrc).
+    This file never reads COINGECKO_DEMO_API_KEY or COINGECKO_API_KEY.
 """
 
 from __future__ import annotations
@@ -47,12 +38,20 @@ import requests
 
 from coin_menu import get_coin_choice
 
+# --- config ---
+LOOKBACK_DAYS = 360 * 4  # empty-cache seed; also max allowed increment gap
+CHUNK_DAYS = 90          # must stay <= 100 when interval=hourly
+MIN_FETCH_DAYS = 2       # tiny gaps still request at least this much
+OVERLAP_HOURS = 2        # overlap into cached tail / between chunks
+REQUEST_PAUSE_SEC = 0.25
+
 SCRIPT_DIR = Path(__file__).resolve().parent
 DATA_DIR = SCRIPT_DIR / "cg_data"
 
-DEMO_HOST = "https://api.coingecko.com/api/v3"
-DEMO_KEY_HEADER = "x-cg-demo-api-key"
-DEMO_KEY_ENV = "COINGECKO_DEMO_API_KEY"
+ANALYST_HOST = "https://pro-api.coingecko.com/api/v3"
+ANALYST_KEY_HEADER = "x-cg-pro-api-key"
+ANALYST_KEY_ENV = "COINGECKO_ANALYST_API_KEY"
+HOURLY_INTERVAL_MAX_DAYS = 100
 
 DEFAULT_SYMBOL = "BTC"
 GECKO_IDS = {
@@ -64,17 +63,27 @@ GECKO_IDS = {
     "TROLL": "troll-2",
 }
 
-MAX_INCREMENT_DAYS = 60
-MIN_FETCH_DAYS = 2
-OVERLAP = timedelta(hours=2)
+OVERLAP = timedelta(hours=OVERLAP_HOURS)
 
 
 class CacheTooStaleError(RuntimeError):
-    """Existing cache is more than MAX_INCREMENT_DAYS behind UTC midnight."""
+    """Existing cache is more than LOOKBACK_DAYS behind UTC midnight."""
+
+
+def validate_config() -> None:
+    if LOOKBACK_DAYS < 1:
+        raise ValueError(f"LOOKBACK_DAYS must be >= 1, got {LOOKBACK_DAYS}")
+    if CHUNK_DAYS < 1:
+        raise ValueError(f"CHUNK_DAYS must be >= 1, got {CHUNK_DAYS}")
+    if CHUNK_DAYS > HOURLY_INTERVAL_MAX_DAYS:
+        raise ValueError(
+            f"CHUNK_DAYS is {CHUNK_DAYS}. CoinGecko interval=hourly "
+            f"allows at most {HOURLY_INTERVAL_MAX_DAYS} days per request."
+        )
 
 
 def latest_utc_midnight(now: datetime | None = None) -> datetime:
-    """Most recent 00:00 UTC. Daily bars are closed through this instant."""
+    """Most recent 00:00 UTC. Closed hourly bars run through this instant."""
     current = now or datetime.now(timezone.utc)
     if current.tzinfo is None:
         current = current.replace(tzinfo=timezone.utc)
@@ -95,10 +104,6 @@ def hourly_cache_path(symbol: str = DEFAULT_SYMBOL) -> Path:
     return DATA_DIR / f"{symbol.strip().upper()}_data_hourly.csv"
 
 
-def daily_cache_path(symbol: str = DEFAULT_SYMBOL) -> Path:
-    return DATA_DIR / f"{symbol.strip().upper()}_data_daily.csv"
-
-
 def _legacy_hourly_path(symbol: str = DEFAULT_SYMBOL) -> Path:
     return DATA_DIR / f"{symbol.strip().upper()}_data.csv"
 
@@ -108,12 +113,12 @@ def cache_path(symbol: str = DEFAULT_SYMBOL) -> Path:
     return hourly_cache_path(symbol)
 
 
-def demo_api_key() -> str:
-    """Read the Demo key only. Does not fall back to a Pro/Analyst key."""
-    value = os.getenv(DEMO_KEY_ENV, "").strip()
+def analyst_api_key() -> str:
+    """Read the Analyst key only. Does not fall back to Demo or generic keys."""
+    value = os.getenv(ANALYST_KEY_ENV, "").strip()
     if not value:
         raise RuntimeError(
-            f"No Demo API key found. Export {DEMO_KEY_ENV} in ~/.bashrc "
+            f"No Analyst API key found. Export {ANALYST_KEY_ENV} in ~/.bashrc "
             "and open a new shell (or run: source ~/.bashrc)."
         )
     return value
@@ -163,14 +168,10 @@ def save_hourly(df: pd.DataFrame, symbol: str = DEFAULT_SYMBOL) -> Path:
     return path
 
 
-def save_daily(df: pd.DataFrame, symbol: str = DEFAULT_SYMBOL) -> Path:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    path = daily_cache_path(symbol)
-    out = _naive_utc_index(df)
-    out = out[~out.index.duplicated(keep="last")]
-    cols = ["open", "high", "low", "close", "volumeto"]
-    out[cols].to_csv(path)
-    return path
+def _as_utc(ts: datetime) -> datetime:
+    if ts.tzinfo is None:
+        return ts.replace(tzinfo=timezone.utc)
+    return ts.astimezone(timezone.utc)
 
 
 def _series_from_pairs(pairs: list) -> pd.Series:
@@ -183,8 +184,8 @@ def _series_from_pairs(pairs: list) -> pd.Series:
 
 
 def _request_json(path: str, params: dict, retries: int = 3) -> dict:
-    headers = {DEMO_KEY_HEADER: demo_api_key()}
-    url = f"{DEMO_HOST}{path}"
+    headers = {ANALYST_KEY_HEADER: analyst_api_key()}
+    url = f"{ANALYST_HOST}{path}"
     last_error: Exception | None = None
     for attempt in range(retries):
         try:
@@ -197,7 +198,7 @@ def _request_json(path: str, params: dict, retries: int = 3) -> dict:
             if response.status_code in {401, 403}:
                 raise RuntimeError(
                     f"CoinGecko auth failed ({response.status_code}). "
-                    f"Check {DEMO_KEY_ENV} (Demo key + {DEMO_KEY_HEADER})."
+                    f"Check {ANALYST_KEY_ENV} (Analyst key + {ANALYST_KEY_HEADER})."
                 )
             response.raise_for_status()
             data = response.json()
@@ -214,19 +215,17 @@ def _request_json(path: str, params: dict, retries: int = 3) -> dict:
 
 
 def fetch_hourly_range(symbol: str, start: datetime, end: datetime) -> pd.DataFrame:
-    """One Demo /market_chart/range call. Window must stay inside 2–60 days."""
-    if start.tzinfo is None:
-        start = start.replace(tzinfo=timezone.utc)
-    if end.tzinfo is None:
-        end = end.replace(tzinfo=timezone.utc)
+    """One Analyst /market_chart/range call with interval=hourly."""
+    start = _as_utc(start)
+    end = _as_utc(end)
     if end <= start:
         return pd.DataFrame(columns=["price", "volume"])
 
     span_days = (end - start).total_seconds() / 86400
-    if span_days > MAX_INCREMENT_DAYS:
-        raise CacheTooStaleError(
+    if span_days > HOURLY_INTERVAL_MAX_DAYS:
+        raise ValueError(
             f"Fetch window is {span_days:.1f} days. "
-            f"This script only covers {MAX_INCREMENT_DAYS} days."
+            f"interval=hourly allows at most {HOURLY_INTERVAL_MAX_DAYS} days."
         )
 
     coin_id = gecko_id_for(symbol)
@@ -236,6 +235,7 @@ def fetch_hourly_range(symbol: str, start: datetime, end: datetime) -> pd.DataFr
             "vs_currency": "usd",
             "from": int(start.timestamp()),
             "to": int(end.timestamp()),
+            "interval": "hourly",
         },
     )
     prices = _series_from_pairs(payload.get("prices") or [])
@@ -248,42 +248,66 @@ def fetch_hourly_range(symbol: str, start: datetime, end: datetime) -> pd.DataFr
     return _naive_utc_index(frame)
 
 
-def hourly_to_daily(hourly: pd.DataFrame) -> pd.DataFrame:
-    """Resample hourly snapshots to daily OHLC + last 24h volume print."""
-    if hourly.empty:
-        return pd.DataFrame(columns=["open", "high", "low", "close", "volumeto"])
+def _chunk_windows(start: datetime, end: datetime) -> list[tuple[datetime, datetime]]:
+    start = _as_utc(start)
+    end = _as_utc(end)
+    if end <= start:
+        return []
 
-    price = hourly["price"].copy()
-    price.index = pd.to_datetime(price.index)
-    if price.index.tz is None:
-        price.index = price.index.tz_localize("UTC")
-    else:
-        price.index = price.index.tz_convert("UTC")
+    windows: list[tuple[datetime, datetime]] = []
+    cursor = start
+    chunk = timedelta(days=CHUNK_DAYS)
+    while cursor < end:
+        chunk_end = min(cursor + chunk, end)
+        windows.append((cursor, chunk_end))
+        if chunk_end >= end:
+            break
+        nxt = chunk_end - OVERLAP
+        cursor = nxt if nxt > cursor else chunk_end
+    return windows
 
-    daily = price.resample("1D").ohlc()
-    daily.columns = ["open", "high", "low", "close"]
 
-    if "volume" in hourly.columns:
-        vol = hourly["volume"].copy()
-        vol.index = pd.to_datetime(vol.index)
-        if vol.index.tz is None:
-            vol.index = vol.index.tz_localize("UTC")
+def fetch_hourly_chunks(
+    symbol: str,
+    start: datetime,
+    end: datetime,
+    cached: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    """Fetch start→end in CHUNK_DAYS windows and merge onto cached rows."""
+    combined = (
+        cached.copy()
+        if cached is not None and not cached.empty
+        else pd.DataFrame(columns=["price", "volume"])
+    )
+    windows = _chunk_windows(start, end)
+    total = len(windows)
+    for i, (win_start, win_end) in enumerate(windows, start=1):
+        print(
+            f"  chunk {i}/{total}  "
+            f"{win_start.strftime('%Y-%m-%d %H:%M')} → "
+            f"{win_end.strftime('%Y-%m-%d %H:%M')} UTC"
+        )
+        fresh = fetch_hourly_range(symbol, win_start, win_end)
+        if not fresh.empty:
+            if combined.empty:
+                combined = fresh
+            else:
+                combined = pd.concat([combined, fresh])
+                combined = combined[~combined.index.duplicated(keep="last")].sort_index()
+            save_hourly(combined, symbol)
+        elif combined.empty:
+            print("  (no rows in this window)")
         else:
-            vol.index = vol.index.tz_convert("UTC")
-        daily["volumeto"] = vol.resample("1D").last()
-    else:
-        daily["volumeto"] = float("nan")
-
-    daily = daily.dropna(subset=["close"])
-    daily.index = daily.index.tz_localize(None)
-    daily.index.name = "time"
-    return daily[["open", "high", "low", "close", "volumeto"]]
+            print("  (no new rows in this window)")
+        if i < total and REQUEST_PAUSE_SEC > 0:
+            time.sleep(REQUEST_PAUSE_SEC)
+    return combined
 
 
 def _plan_window(cached: pd.DataFrame) -> tuple[str, datetime, datetime]:
     """Decide seed / increment / current / stale against latest UTC midnight."""
     utc0 = latest_utc_midnight()
-    seed_start = utc0 - timedelta(days=MAX_INCREMENT_DAYS)
+    seed_start = utc0 - timedelta(days=LOOKBACK_DAYS)
 
     if cached.empty:
         return "seed", seed_start, utc0
@@ -291,10 +315,7 @@ def _plan_window(cached: pd.DataFrame) -> tuple[str, datetime, datetime]:
     latest = cached.index.max()
     if not isinstance(latest, datetime):
         latest = pd.Timestamp(latest).to_pydatetime()
-    if latest.tzinfo is None:
-        latest_utc = latest.replace(tzinfo=timezone.utc)
-    else:
-        latest_utc = latest.astimezone(timezone.utc)
+    latest_utc = _as_utc(latest)
 
     gap = utc0 - latest_utc
     gap_days = gap.total_seconds() / 86400
@@ -302,14 +323,14 @@ def _plan_window(cached: pd.DataFrame) -> tuple[str, datetime, datetime]:
     if gap_days <= 0:
         return "current", utc0, utc0
 
-    if gap_days > MAX_INCREMENT_DAYS:
+    if gap_days > LOOKBACK_DAYS:
         latest_txt = latest_utc.strftime("%Y-%m-%d %H:%M UTC")
         need_txt = utc0.strftime("%Y-%m-%d %H:%M UTC")
         raise CacheTooStaleError(
             f"Cache is {gap_days:.1f} days behind "
             f"(latest {latest_txt}, need through {need_txt}). "
-            f"demo_get_hourly_data_increments.py only fills up to "
-            f"{MAX_INCREMENT_DAYS} days. Run analyst_get_hourly_data.py first."
+            f"analyst_get_hourly_data.py only fills up to {LOOKBACK_DAYS} days. "
+            "Raise LOOKBACK_DAYS or delete the hourly CSV to re-seed."
         )
 
     start = latest_utc - OVERLAP
@@ -319,8 +340,10 @@ def _plan_window(cached: pd.DataFrame) -> tuple[str, datetime, datetime]:
     return "increment", start, utc0
 
 
-def get_hourly_data_increments(symbol: str = DEFAULT_SYMBOL) -> pd.DataFrame:
-    """Update the hourly cache if needed, write both CSVs, return daily OHLC."""
+def get_hourly_data(symbol: str = DEFAULT_SYMBOL) -> pd.DataFrame:
+    """Update the hourly cache if needed and return the hourly snapshots."""
+    validate_config()
+    analyst_api_key()
     symbol = symbol.strip().upper()
     cached = load_hourly(symbol)
     action, start, end = _plan_window(cached)
@@ -334,59 +357,43 @@ def get_hourly_data_increments(symbol: str = DEFAULT_SYMBOL) -> pd.DataFrame:
     else:
         if action == "seed":
             print(
-                f"No {symbol} hourly cache. Seeding {MAX_INCREMENT_DAYS} days "
+                f"No {symbol} hourly cache. Seeding {LOOKBACK_DAYS} days "
                 f"{start.strftime('%Y-%m-%d')} → {end.strftime('%Y-%m-%d')} UTC."
             )
         else:
             print(
-                f"{symbol} hourly increment "
+                f"{symbol} hourly fill "
                 f"{start.strftime('%Y-%m-%d %H:%M')} → {end.strftime('%Y-%m-%d %H:%M')} UTC."
             )
 
-        fresh = fetch_hourly_range(symbol, start, end)
-        if fresh.empty:
-            if cached.empty:
-                raise RuntimeError(f"CoinGecko returned no hourly prices for {symbol}")
-            print("No new hourly rows; using existing cache.")
-            combined = cached
-        elif cached.empty:
-            combined = fresh
-        else:
-            combined = pd.concat([cached, fresh])
-            combined = combined[~combined.index.duplicated(keep="last")].sort_index()
+        combined = fetch_hourly_chunks(symbol, start, end, cached)
+        if combined.empty:
+            raise RuntimeError(f"CoinGecko returned no hourly prices for {symbol}")
 
     hourly_path = save_hourly(combined, symbol)
-    daily = hourly_to_daily(combined)
-    daily_path = save_daily(daily, symbol)
     print(
         f"Saved {len(combined)} hourly rows → {hourly_path}\n"
-        f"Saved {len(daily)} daily rows → {daily_path}\n"
-        f"Daily OHLC from hourly: {len(daily)} days  "
-        f"{daily.index.min().date()} → {daily.index.max().date()}"
+        f"Hourly range: {combined.index.min()} → {combined.index.max()}"
     )
-    return daily
-
-
-def get_increments(symbol: str = DEFAULT_SYMBOL) -> pd.DataFrame:
-    """Alias for get_hourly_data_increments."""
-    return get_hourly_data_increments(symbol)
+    return combined
 
 
 def get_hourly(symbol: str = DEFAULT_SYMBOL) -> pd.DataFrame:
     """Update if needed, then return the hourly snapshot cache."""
-    get_hourly_data_increments(symbol)
-    return load_hourly(symbol)
+    return get_hourly_data(symbol)
 
 
 def main() -> None:
-    choices = get_coin_choice("Demo hourly increment - Coin Selection")
+    validate_config()
+    analyst_api_key()
+    choices = get_coin_choice("Analyst hourly data - Coin Selection")
     total = len(choices)
     for i, (name, symbol) in enumerate(choices, start=1):
         print(f"\n[{i}/{total}] {name} ({symbol})")
         try:
-            daily = get_hourly_data_increments(symbol)
+            hourly = get_hourly_data(symbol)
             print()
-            print(daily.tail())
+            print(hourly.tail())
         except Exception as exc:
             print(f"✘ {name} ({symbol}) failed: {exc}")
             continue
