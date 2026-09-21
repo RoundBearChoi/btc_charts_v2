@@ -22,7 +22,8 @@ Rules:
     - Cache gap  > 60 days -> error (use the long-term script).
 
 Env:
-    COINGECKO_API_KEY   Demo API key
+    COINGECKO_DEMO_API_KEY   Demo API key only (export in ~/.bashrc).
+    This file never reads COINGECKO_API_KEY or a Pro/Analyst key.
 """
 
 from __future__ import annotations
@@ -40,6 +41,7 @@ DATA_DIR = SCRIPT_DIR / "cg_data"
 
 DEMO_HOST = "https://api.coingecko.com/api/v3"
 DEMO_KEY_HEADER = "x-cg-demo-api-key"
+DEMO_KEY_ENV = "COINGECKO_DEMO_API_KEY"
 
 DEFAULT_SYMBOL = "BTC"
 GECKO_IDS = {
@@ -77,11 +79,13 @@ def cache_path(symbol: str = DEFAULT_SYMBOL) -> Path:
     return DATA_DIR / f"{symbol.strip().upper()}_data.csv"
 
 
-def api_key() -> str:
-    value = os.getenv("COINGECKO_API_KEY", "").strip()
+def demo_api_key() -> str:
+    """Read the Demo key only. Does not fall back to a Pro/Analyst key."""
+    value = os.getenv(DEMO_KEY_ENV, "").strip()
     if not value:
         raise RuntimeError(
-            "No CoinGecko API key found. Export COINGECKO_API_KEY."
+            f"No Demo API key found. Export {DEMO_KEY_ENV} in ~/.bashrc "
+            "and open a new shell (or run: source ~/.bashrc)."
         )
     return value
 
@@ -128,7 +132,7 @@ def _series_from_pairs(pairs: list) -> pd.Series:
 
 
 def _request_json(path: str, params: dict, retries: int = 3) -> dict:
-    headers = {DEMO_KEY_HEADER: api_key()}
+    headers = {DEMO_KEY_HEADER: demo_api_key()}
     url = f"{DEMO_HOST}{path}"
     last_error: Exception | None = None
     for attempt in range(retries):
@@ -142,7 +146,7 @@ def _request_json(path: str, params: dict, retries: int = 3) -> dict:
             if response.status_code in {401, 403}:
                 raise RuntimeError(
                     f"CoinGecko auth failed ({response.status_code}). "
-                    "Check COINGECKO_API_KEY (Demo key + x-cg-demo-api-key)."
+                    f"Check {DEMO_KEY_ENV} (Demo key + {DEMO_KEY_HEADER})."
                 )
             response.raise_for_status()
             data = response.json()
