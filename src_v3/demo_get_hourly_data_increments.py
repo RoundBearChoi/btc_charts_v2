@@ -266,7 +266,7 @@ def hourly_to_daily(hourly: pd.DataFrame) -> pd.DataFrame:
     if "volume" in hourly.columns:
         vol = hourly["volume"].copy()
         vol.index = pd.to_datetime(vol.index)
-        if vol.index.tz is None:
+    if vol.index.tz is None:
             vol.index = vol.index.tz_localize("UTC")
         else:
             vol.index = vol.index.tz_convert("UTC")
@@ -321,6 +321,7 @@ def _plan_window(cached: pd.DataFrame) -> tuple[str, datetime, datetime]:
 
 def get_hourly_data_increments(symbol: str = DEFAULT_SYMBOL) -> pd.DataFrame:
     """Update the hourly cache if needed, write both CSVs, return daily OHLC."""
+    demo_api_key()
     symbol = symbol.strip().upper()
     cached = load_hourly(symbol)
     action, start, end = _plan_window(cached)
@@ -379,6 +380,7 @@ def get_hourly(symbol: str = DEFAULT_SYMBOL) -> pd.DataFrame:
 
 
 def main() -> None:
+    demo_api_key()
     choices = get_coin_choice("Demo hourly increment - Coin Selection")
     total = len(choices)
     for i, (name, symbol) in enumerate(choices, start=1):
