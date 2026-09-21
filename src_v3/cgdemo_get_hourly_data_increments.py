@@ -1,14 +1,16 @@
-"""CoinGecko Demo hourly increment fetcher (BTC first).
+"""CoinGecko Demo hourly increment fetcher.
 
 File: src_v3/cgdemo_get_hourly_data_increments.py
 
 This script only tops up recent hourly snapshots. It does not backfill
 months of history. A later Analyst-tier script owns the long tail.
 
-On disk (only these two files):
-    src_v3/cg_data/BTC_data_hourly.csv
+Coin pick comes from src_v3/coin_menu.py + src_v3/coins.csv.
+
+On disk (only these two files per symbol):
+    src_v3/cg_data/{SYMBOL}_data_hourly.csv
         hourly snapshots: time, price, volume
-    src_v3/cg_data/BTC_data_daily.csv
+    src_v3/cg_data/{SYMBOL}_data_daily.csv
         daily OHLC derived from those hours:
         time, open, high, low, close, volumeto
 
@@ -43,6 +45,8 @@ from pathlib import Path
 import pandas as pd
 import requests
 
+from coin_menu import get_coin_choice
+
 SCRIPT_DIR = Path(__file__).resolve().parent
 DATA_DIR = SCRIPT_DIR / "cg_data"
 
@@ -53,6 +57,11 @@ DEMO_KEY_ENV = "COINGECKO_DEMO_API_KEY"
 DEFAULT_SYMBOL = "BTC"
 GECKO_IDS = {
     "BTC": "bitcoin",
+    "ETH": "ethereum",
+    "SOL": "solana",
+    "XMR": "monero",
+    "FARTCOIN": "fartcoin",
+    "TROLL": "troll-2",
 }
 
 MAX_INCREMENT_DAYS = 60
@@ -369,7 +378,19 @@ def get_hourly(symbol: str = DEFAULT_SYMBOL) -> pd.DataFrame:
     return load_hourly(symbol)
 
 
+def main() -> None:
+    choices = get_coin_choice()
+    total = len(choices)
+    for i, (name, symbol) in enumerate(choices, start=1):
+        print(f"\n[{i}/{total}] {name} ({symbol})")
+        try:
+            daily = get_hourly_data_increments(symbol)
+            print()
+            print(daily.tail())
+        except Exception as exc:
+            print(f"✘ {name} ({symbol}) failed: {exc}")
+            continue
+
+
 if __name__ == "__main__":
-    daily = get_hourly_data_increments("BTC")
-    print()
-    print(daily.tail())
+    main()
