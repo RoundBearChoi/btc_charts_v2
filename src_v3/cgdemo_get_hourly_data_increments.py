@@ -379,7 +379,7 @@ def get_hourly(symbol: str = DEFAULT_SYMBOL) -> pd.DataFrame:
 
 
 def main() -> None:
-    choices = get_coin_choice()
+    choices = get_coin_choice("Demo hourly increment - Coin Selection")
     total = len(choices)
     for i, (name, symbol) in enumerate(choices, start=1):
         print(f"\n[{i}/{total}] {name} ({symbol})")
