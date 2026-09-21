@@ -5,8 +5,8 @@ File: src_v3/cgdemo_get_hourly_data_increments.py
 This script only tops up recent hourly snapshots. It does not backfill
 months of history. A later Analyst-tier script owns the long tail.
 
-On disk:
-    src_v3/cg_data/BTC_data.csv
+On disk (only these two files):
+    src_v3/cg_data/BTC_data_hourly.csv
         hourly snapshots: time, price, volume
     src_v3/cg_data/BTC_data_daily.csv
         daily OHLC derived from those hours:
@@ -83,11 +83,15 @@ def gecko_id_for(symbol: str) -> str:
 
 
 def hourly_cache_path(symbol: str = DEFAULT_SYMBOL) -> Path:
-    return DATA_DIR / f"{symbol.strip().upper()}_data.csv"
+    return DATA_DIR / f"{symbol.strip().upper()}_data_hourly.csv"
 
 
 def daily_cache_path(symbol: str = DEFAULT_SYMBOL) -> Path:
     return DATA_DIR / f"{symbol.strip().upper()}_data_daily.csv"
+
+
+def _legacy_hourly_path(symbol: str = DEFAULT_SYMBOL) -> Path:
+    return DATA_DIR / f"{symbol.strip().upper()}_data.csv"
 
 
 def cache_path(symbol: str = DEFAULT_SYMBOL) -> Path:
@@ -115,10 +119,7 @@ def _naive_utc_index(df: pd.DataFrame) -> pd.DataFrame:
     return out.sort_index()
 
 
-def load_hourly(symbol: str = DEFAULT_SYMBOL) -> pd.DataFrame:
-    path = hourly_cache_path(symbol)
-    if not path.exists():
-        return pd.DataFrame(columns=["price", "volume"])
+def _read_hourly_csv(path: Path) -> pd.DataFrame:
     df = pd.read_csv(path, index_col=0, parse_dates=True)
     if df.empty:
         return pd.DataFrame(columns=["price", "volume"])
@@ -129,12 +130,27 @@ def load_hourly(symbol: str = DEFAULT_SYMBOL) -> pd.DataFrame:
     return df[["price", "volume"]]
 
 
+def load_hourly(symbol: str = DEFAULT_SYMBOL) -> pd.DataFrame:
+    path = hourly_cache_path(symbol)
+    if path.exists():
+        return _read_hourly_csv(path)
+    legacy = _legacy_hourly_path(symbol)
+    if legacy.exists():
+        print(f"Found legacy hourly cache {legacy.name}; will save as {path.name}.")
+        return _read_hourly_csv(legacy)
+    return pd.DataFrame(columns=["price", "volume"])
+
+
 def save_hourly(df: pd.DataFrame, symbol: str = DEFAULT_SYMBOL) -> Path:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     path = hourly_cache_path(symbol)
     out = _naive_utc_index(df)
     out = out[~out.index.duplicated(keep="last")]
     out[["price", "volume"]].to_csv(path)
+    legacy = _legacy_hourly_path(symbol)
+    if legacy.exists() and legacy != path:
+        legacy.unlink()
+        print(f"Removed legacy file {legacy.name}.")
     return path
 
 
@@ -295,7 +311,7 @@ def _plan_window(cached: pd.DataFrame) -> tuple[str, datetime, datetime]:
 
 
 def get_hourly_data_increments(symbol: str = DEFAULT_SYMBOL) -> pd.DataFrame:
-    """Update the hourly cache if needed, write daily CSV, return daily OHLC."""
+    """Update the hourly cache if needed, write both CSVs, return daily OHLC."""
     symbol = symbol.strip().upper()
     cached = load_hourly(symbol)
     action, start, end = _plan_window(cached)
@@ -330,12 +346,11 @@ def get_hourly_data_increments(symbol: str = DEFAULT_SYMBOL) -> pd.DataFrame:
             combined = pd.concat([cached, fresh])
             combined = combined[~combined.index.duplicated(keep="last")].sort_index()
 
-        hourly_path = save_hourly(combined, symbol)
-        print(f"Saved {len(combined)} hourly rows → {hourly_path}")
-
+    hourly_path = save_hourly(combined, symbol)
     daily = hourly_to_daily(combined)
     daily_path = save_daily(daily, symbol)
     print(
+        f"Saved {len(combined)} hourly rows → {hourly_path}\n"
         f"Saved {len(daily)} daily rows → {daily_path}\n"
         f"Daily OHLC from hourly: {len(daily)} days  "
         f"{daily.index.min().date()} → {daily.index.max().date()}"
