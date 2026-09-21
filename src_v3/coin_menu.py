@@ -81,6 +81,9 @@ def get_coin_choice(
     all_idx = n + 1
 
     print()
+    print("=" * 60)
+    print(prompt_title)
+    print("=" * 60)
     for i, row in coins.iterrows():
         print(f"{i + 1}) {row['name']}")
     print(f"{all_idx}) ALL")
