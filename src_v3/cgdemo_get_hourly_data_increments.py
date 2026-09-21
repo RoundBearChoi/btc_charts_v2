@@ -5,23 +5,28 @@ File: src_v3/cgdemo_get_hourly_data_increments.py
 This script only tops up recent hourly snapshots. It does not backfill
 months of history. A later Analyst-tier script owns the long tail.
 
-On disk (hourly snapshots, UTC):
+On disk:
     src_v3/cg_data/BTC_data.csv
-    columns: time, price, volume
+        hourly snapshots: time, price, volume
+    src_v3/cg_data/BTC_data_daily.csv
+        daily OHLC derived from those hours:
+        time, open, high, low, close, volumeto
 
-volume is CoinGecko's sliding 24h sum at that timestamp, not session volume.
+volume / volumeto is CoinGecko's sliding 24h sum, not session volume.
+Daily volumeto is the last 24h-volume snapshot of that UTC day.
 
-Returned to callers: daily OHLC built from those hourly snapshots
+Daily OHLC from hourly snapshots:
     open  = first hourly price of the UTC day
     high  = max hourly price of the UTC day
     low   = min hourly price of the UTC day
     close = last hourly price of the UTC day
-    volumeto = last 24h-volume snapshot of the UTC day
 
 Rules:
     - No cache  -> seed latest UTC midnight back 60 days.
     - Cache gap <= 60 days -> fetch the missing tail and merge.
     - Cache gap  > 60 days -> error (use the long-term script).
+    - Daily CSV is always rebuilt from the full hourly cache.
+      It is not a separate Demo download.
 
 Env:
     COINGECKO_DEMO_API_KEY   Demo API key only (export in ~/.bashrc).
@@ -77,8 +82,17 @@ def gecko_id_for(symbol: str) -> str:
     return GECKO_IDS[ticker]
 
 
-def cache_path(symbol: str = DEFAULT_SYMBOL) -> Path:
+def hourly_cache_path(symbol: str = DEFAULT_SYMBOL) -> Path:
     return DATA_DIR / f"{symbol.strip().upper()}_data.csv"
+
+
+def daily_cache_path(symbol: str = DEFAULT_SYMBOL) -> Path:
+    return DATA_DIR / f"{symbol.strip().upper()}_data_daily.csv"
+
+
+def cache_path(symbol: str = DEFAULT_SYMBOL) -> Path:
+    """Hourly cache path. Kept as an alias."""
+    return hourly_cache_path(symbol)
 
 
 def demo_api_key() -> str:
@@ -102,7 +116,7 @@ def _naive_utc_index(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def load_hourly(symbol: str = DEFAULT_SYMBOL) -> pd.DataFrame:
-    path = cache_path(symbol)
+    path = hourly_cache_path(symbol)
     if not path.exists():
         return pd.DataFrame(columns=["price", "volume"])
     df = pd.read_csv(path, index_col=0, parse_dates=True)
@@ -117,10 +131,20 @@ def load_hourly(symbol: str = DEFAULT_SYMBOL) -> pd.DataFrame:
 
 def save_hourly(df: pd.DataFrame, symbol: str = DEFAULT_SYMBOL) -> Path:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    path = cache_path(symbol)
+    path = hourly_cache_path(symbol)
     out = _naive_utc_index(df)
     out = out[~out.index.duplicated(keep="last")]
     out[["price", "volume"]].to_csv(path)
+    return path
+
+
+def save_daily(df: pd.DataFrame, symbol: str = DEFAULT_SYMBOL) -> Path:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    path = daily_cache_path(symbol)
+    out = _naive_utc_index(df)
+    out = out[~out.index.duplicated(keep="last")]
+    cols = ["open", "high", "low", "close", "volumeto"]
+    out[cols].to_csv(path)
     return path
 
 
@@ -271,7 +295,7 @@ def _plan_window(cached: pd.DataFrame) -> tuple[str, datetime, datetime]:
 
 
 def get_hourly_data_increments(symbol: str = DEFAULT_SYMBOL) -> pd.DataFrame:
-    """Update the hourly cache if needed and return daily OHLC."""
+    """Update the hourly cache if needed, write daily CSV, return daily OHLC."""
     symbol = symbol.strip().upper()
     cached = load_hourly(symbol)
     action, start, end = _plan_window(cached)
@@ -281,40 +305,38 @@ def get_hourly_data_increments(symbol: str = DEFAULT_SYMBOL) -> pd.DataFrame:
             f"{symbol} hourly cache is current through {end.strftime('%Y-%m-%d %H:%M UTC')} "
             f"({len(cached)} hourly rows)."
         )
-        daily = hourly_to_daily(cached)
-        print(
-            f"Daily OHLC from hourly: {len(daily)} days  "
-            f"{daily.index.min().date()} → {daily.index.max().date()}"
-        )
-        return daily
-
-    if action == "seed":
-        print(
-            f"No {symbol} hourly cache. Seeding {MAX_INCREMENT_DAYS} days "
-            f"{start.strftime('%Y-%m-%d')} → {end.strftime('%Y-%m-%d')} UTC."
-        )
-    else:
-        print(
-            f"{symbol} hourly increment "
-            f"{start.strftime('%Y-%m-%d %H:%M')} → {end.strftime('%Y-%m-%d %H:%M')} UTC."
-        )
-
-    fresh = fetch_hourly_range(symbol, start, end)
-    if fresh.empty:
-        if cached.empty:
-            raise RuntimeError(f"CoinGecko returned no hourly prices for {symbol}")
-        print("No new hourly rows; using existing cache.")
         combined = cached
-    elif cached.empty:
-        combined = fresh
     else:
-        combined = pd.concat([cached, fresh])
-        combined = combined[~combined.index.duplicated(keep="last")].sort_index()
+        if action == "seed":
+            print(
+                f"No {symbol} hourly cache. Seeding {MAX_INCREMENT_DAYS} days "
+                f"{start.strftime('%Y-%m-%d')} → {end.strftime('%Y-%m-%d')} UTC."
+            )
+        else:
+            print(
+                f"{symbol} hourly increment "
+                f"{start.strftime('%Y-%m-%d %H:%M')} → {end.strftime('%Y-%m-%d %H:%M')} UTC."
+            )
 
-    path = save_hourly(combined, symbol)
+        fresh = fetch_hourly_range(symbol, start, end)
+        if fresh.empty:
+            if cached.empty:
+                raise RuntimeError(f"CoinGecko returned no hourly prices for {symbol}")
+            print("No new hourly rows; using existing cache.")
+            combined = cached
+        elif cached.empty:
+            combined = fresh
+        else:
+            combined = pd.concat([cached, fresh])
+            combined = combined[~combined.index.duplicated(keep="last")].sort_index()
+
+        hourly_path = save_hourly(combined, symbol)
+        print(f"Saved {len(combined)} hourly rows → {hourly_path}")
+
     daily = hourly_to_daily(combined)
+    daily_path = save_daily(daily, symbol)
     print(
-        f"Saved {len(combined)} hourly rows → {path}\n"
+        f"Saved {len(daily)} daily rows → {daily_path}\n"
         f"Daily OHLC from hourly: {len(daily)} days  "
         f"{daily.index.min().date()} → {daily.index.max().date()}"
     )
