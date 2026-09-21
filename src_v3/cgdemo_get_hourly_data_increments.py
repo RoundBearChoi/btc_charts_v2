@@ -1,4 +1,6 @@
-"""CoinGecko Demo increment fetcher (BTC first).
+"""CoinGecko Demo hourly increment fetcher (BTC first).
+
+File: src_v3/cgdemo_get_hourly_data_increments.py
 
 This script only tops up recent hourly snapshots. It does not backfill
 months of history. A later Analyst-tier script owns the long tail.
@@ -257,7 +259,7 @@ def _plan_window(cached: pd.DataFrame) -> tuple[str, datetime, datetime]:
         raise CacheTooStaleError(
             f"Cache is {gap_days:.1f} days behind "
             f"(latest {latest_txt}, need through {need_txt}). "
-            f"cgdemo_get_prices_increments.py only fills up to "
+            f"cgdemo_get_hourly_data_increments.py only fills up to "
             f"{MAX_INCREMENT_DAYS} days. Run the long-term Analyst script first."
         )
 
@@ -268,7 +270,7 @@ def _plan_window(cached: pd.DataFrame) -> tuple[str, datetime, datetime]:
     return "increment", start, utc0
 
 
-def get_increments(symbol: str = DEFAULT_SYMBOL) -> pd.DataFrame:
+def get_hourly_data_increments(symbol: str = DEFAULT_SYMBOL) -> pd.DataFrame:
     """Update the hourly cache if needed and return daily OHLC."""
     symbol = symbol.strip().upper()
     cached = load_hourly(symbol)
@@ -276,24 +278,24 @@ def get_increments(symbol: str = DEFAULT_SYMBOL) -> pd.DataFrame:
 
     if action == "current":
         print(
-            f"{symbol} cache is current through {end.strftime('%Y-%m-%d %H:%M UTC')} "
+            f"{symbol} hourly cache is current through {end.strftime('%Y-%m-%d %H:%M UTC')} "
             f"({len(cached)} hourly rows)."
         )
         daily = hourly_to_daily(cached)
         print(
-            f"Daily OHLC: {len(daily)} days  "
+            f"Daily OHLC from hourly: {len(daily)} days  "
             f"{daily.index.min().date()} → {daily.index.max().date()}"
         )
         return daily
 
     if action == "seed":
         print(
-            f"No {symbol} cache. Seeding {MAX_INCREMENT_DAYS} days "
+            f"No {symbol} hourly cache. Seeding {MAX_INCREMENT_DAYS} days "
             f"{start.strftime('%Y-%m-%d')} → {end.strftime('%Y-%m-%d')} UTC."
         )
     else:
         print(
-            f"{symbol} cache increment "
+            f"{symbol} hourly increment "
             f"{start.strftime('%Y-%m-%d %H:%M')} → {end.strftime('%Y-%m-%d %H:%M')} UTC."
         )
 
@@ -313,19 +315,24 @@ def get_increments(symbol: str = DEFAULT_SYMBOL) -> pd.DataFrame:
     daily = hourly_to_daily(combined)
     print(
         f"Saved {len(combined)} hourly rows → {path}\n"
-        f"Daily OHLC: {len(daily)} days  "
+        f"Daily OHLC from hourly: {len(daily)} days  "
         f"{daily.index.min().date()} → {daily.index.max().date()}"
     )
     return daily
 
 
+def get_increments(symbol: str = DEFAULT_SYMBOL) -> pd.DataFrame:
+    """Alias for get_hourly_data_increments."""
+    return get_hourly_data_increments(symbol)
+
+
 def get_hourly(symbol: str = DEFAULT_SYMBOL) -> pd.DataFrame:
     """Update if needed, then return the hourly snapshot cache."""
-    get_increments(symbol)
+    get_hourly_data_increments(symbol)
     return load_hourly(symbol)
 
 
 if __name__ == "__main__":
-    daily = get_increments("BTC")
+    daily = get_hourly_data_increments("BTC")
     print()
     print(daily.tail())
