@@ -266,7 +266,7 @@ def hourly_to_daily(hourly: pd.DataFrame) -> pd.DataFrame:
     if "volume" in hourly.columns:
         vol = hourly["volume"].copy()
         vol.index = pd.to_datetime(vol.index)
-    if vol.index.tz is None:
+        if vol.index.tz is None:
             vol.index = vol.index.tz_localize("UTC")
         else:
             vol.index = vol.index.tz_convert("UTC")
